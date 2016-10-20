@@ -52,9 +52,6 @@
     </Content>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="..\..\..\..\..\src\Compiler\CodeAnalysis\InternalsVisibleTo.cs">
-      <Link>InternalsVisibleTo.cs</Link>
-    </Compile>
     <Compile Include="..\..\Shared\CoreClrShim.cs">
       <Link>CoreClrShim.cs</Link>
     </Compile>
@@ -703,6 +700,7 @@
     <Compile Include="Text\TextSpan.cs" />
     <Compile Include="Text\TextUtilities.cs" />
     <Compile Include="TreeDumper.cs" />
+	<Compile Include="InternalsVisibleTo.cs" />
     <Compile Include="VersionHelper.cs" />
     <Compile Include="WellKnownMember.cs" />
     <Compile Include="WellKnownMembers.cs" />

@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<package >
+  <metadata>
+    <id>Peachpie.Microsoft.CodeAnalysis</id>
+    <version>0.2.0-beta</version>
+    <title>Peachpie.Microsoft.CodeAnalysis.</title>
+    <description>Roslyn CodeAnalysis slightly modified to be used by Peachpie.</description>
+    <authors>Peachpie, Jakub Misek, Robert Husak</authors>
+    <owners>iolevel,peachpie,jmisek</owners>
+    <projectUrl>https://github.com/iolevel/Peachpie.Microsoft.CodeAnalysis</projectUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <tags>php peachpie dotnet compiler roslyn</tags>
+    <dependencies>
+      <dependency id="Microsoft.DiaSymReader.Native" version="1.3.3" />
+      <dependency id="System.Collections.Immutable" version="1.2.0" />
+      <dependency id="System.Reflection.Metadata" version="1.4.1-beta" />
+    </dependencies>
+  </metadata>
+  <files>
+    <!--netstandard1.6-->
+    <file src="Binaries/Release/Peachpie.Microsoft.CodeAnalysis.dll" target="lib/netstandard1.6" />
+	<file src="Binaries/Release/Peachpie.Microsoft.CodeAnalysis.pdb" target="lib/netstandard1.6" />
+  </files>
+</package>
