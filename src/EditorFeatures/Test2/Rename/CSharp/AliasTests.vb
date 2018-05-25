@@ -1,13 +1,21 @@
-' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 Imports Microsoft.CodeAnalysis.Rename.ConflictEngine
+Imports Xunit.Abstractions
 
 Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Rename.CSharp
+    <UseExportProvider>
     Public Class AliasTests
+        Private ReadOnly _outputHelper As ITestOutputHelper
+
+        Public Sub New(outputHelper As ITestOutputHelper)
+            _outputHelper = outputHelper
+        End Sub
+
         <WorkItem(543759, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/543759")>
         <Fact, Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub RenameNamespaceAlias()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                     <Workspace>
                         <Project Language="C#" CommonReferences="true">
                             <Document>
@@ -27,7 +35,7 @@ Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Rename.CSharp
         <Fact>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub RenameNamespaceAndAlias()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                 <Workspace>
                     <Project Language="C#" CommonReferences="true">
                         <Document>
@@ -48,7 +56,7 @@ Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Rename.CSharp
         <Fact>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub RenameNamespaceButNotDifferentlyNamedAlias()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                 <Workspace>
                     <Project Language="C#" CommonReferences="true">
                         <Document>
@@ -70,7 +78,7 @@ Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Rename.CSharp
         <Fact>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub RenameConstructedTypeAliasFromUse()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                 <Workspace>
                     <Project Language="C#" CommonReferences="true">
                         <Document><![CDATA[
@@ -78,7 +86,7 @@ Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Rename.CSharp
 
                             class C<T>
                             {
-                                void Foo()
+                                void Goo()
                                 {
                                     var x = new [|$$D|]();
                                 }
@@ -94,7 +102,7 @@ Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Rename.CSharp
         <Fact>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub RenameConstructedTypeAliasFromDeclaration()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                 <Workspace>
                     <Project Language="C#" CommonReferences="true">
                         <Document><![CDATA[
@@ -102,7 +110,7 @@ Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Rename.CSharp
 
                             class C<T>
                             {
-                                void Foo()
+                                void Goo()
                                 {
                                     var x = new [|D|]();
                                 }
@@ -116,7 +124,7 @@ Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Rename.CSharp
         <Fact>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub RenameConstructedTypeAliasFromDeclaration2()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                 <Workspace>
                     <Project Language="C#" CommonReferences="true">
                         <Document><![CDATA[
@@ -124,7 +132,7 @@ Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Rename.CSharp
 
                             class C
                             {
-                                void Foo()
+                                void Goo()
                                 {
                                     [|D|] d;
                                 }
@@ -138,14 +146,14 @@ Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Rename.CSharp
         <Fact>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub RenameSimpleTypeAliasFromUse()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                 <Workspace>
                     <Project Language="C#" CommonReferences="true">
                         <Document>
                             using [|D|] = C;
                             class C
                             {
-                                void Foo()
+                                void Goo()
                                 {
                                     var x = new [|$$D|]();
                                 }
@@ -160,14 +168,14 @@ Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Rename.CSharp
         <Fact>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub RenameSimpleTypeAliasFromDeclaration()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                 <Workspace>
                     <Project Language="C#" CommonReferences="true">
                         <Document>
                             using [|$$D|] = C;
                             class C
                             {
-                                void Foo()
+                                void Goo()
                                 {
                                     var x = new [|D|]();
                                 }
@@ -182,16 +190,16 @@ Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Rename.CSharp
         <Fact>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub RenameSimpleSpecialTypeAliasVariable()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                 <Workspace>
                     <Project Language="C#" CommonReferences="true">
                         <Document>
-                            using Foo = System.Int32;
+                            using Goo = System.Int32;
                             class C
                             {
-                                void Foo()
+                                void Goo()
                                 {
-                                    Foo [|$$x|] = 23;
+                                    Goo [|$$x|] = 23;
                                 }
                             }
                         </Document>
@@ -204,11 +212,11 @@ Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Rename.CSharp
         <Fact>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub RenameSimpleSpecialTypeDoubleAliasVariable()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                 <Workspace>
                     <Project Language="C#" CommonReferences="true">
                         <Document>
-                            using Foo = System.Int32;
+                            using Goo = System.Int32;
                             using Bar = System.Int32;
                             class C
                             {
@@ -227,17 +235,17 @@ Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Rename.CSharp
         <Fact>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub RenameSimpleTypeAliasVariable()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                 <Workspace>
                     <Project Language="C#" CommonReferences="true">
                         <Document>
-                            using Foo = Program;
+                            using Goo = Program;
 
                             class Program
                             {
-                                public void Foo()
+                                public void Goo()
                                 {
-                                    Foo [|$$x|] = null;
+                                    Goo [|$$x|] = null;
                                 }
                             }
                         </Document>
@@ -249,19 +257,19 @@ Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Rename.CSharp
         <Fact>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub RenameAliasNoConflict()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                 <Workspace>
                     <Project Language="C#" CommonReferences="true">
                         <Document>
-using [|Foo|] = C3;
+using [|Goo|] = C3;
 
 namespace N1
 {
     class C1
     {
-        public void Foo()
+        public void Goo()
         {
-            {|stmt1:$$Foo|} f = null;
+            {|stmt1:$$Goo|} f = null;
             C1 c = null;
         }
     }
@@ -282,19 +290,19 @@ public class C3
         <Fact>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub RenameAliasToSameNameNoConflict()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                 <Workspace>
                     <Project Language="C#" CommonReferences="true">
                         <Document>
-                            using [|Foo|] = N1.C1;
+                            using [|Goo|] = N1.C1;
 
                             namespace N1
                             {
                                 class C1
                                 {
-                                    public void Foo()
+                                    public void Goo()
                                     {
-                                        [|$$Foo|] f = null;
+                                        [|$$Goo|] f = null;
                                         C1 c = null;
                                     }
                                 }
@@ -310,18 +318,18 @@ public class C3
         <WorkItem(586743, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/586743")>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub RenameOneDuplicateAliasToNoConflict()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                 <Workspace>
                     <Project Language="C#" CommonReferences="true">
                         <Document>
-                            using foo = System.Int32;
+                            using goo = System.Int32;
                             using [|bar|] = System.Int32;
 
                             class Program
                             {
                                 static void Main(string[] args)
                                 {
-                                    foo f = 1;
+                                    goo f = 1;
                                     {|stmt1:$$bar|} b = 2;
                                 }
                             }
@@ -339,7 +347,7 @@ public class C3
         <WorkItem(542693, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/542693")>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub RenameOuterAliasWithNestedAlias()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                 <Workspace>
                     <Project Language="C#" CommonReferences="true">
                         <Document><![CDATA[
@@ -365,12 +373,12 @@ namespace N
         <WorkItem(10028, "DevDiv_Projects/Roslyn")>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub RenameConflictWithAlias()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                 <Workspace>
                     <Project Language="C#" CommonReferences="true">
                         <Document><![CDATA[
 using System;
-using [|$$Foo|] = System.Console;
+using [|$$Goo|] = System.Console;
 
 class Bar : {|qualify:Attribute|}
 { }
@@ -379,7 +387,7 @@ class C1
 {
     static void Main()
     {
-        {|stmt1:Foo|}.WriteLine("Baz");
+        {|stmt1:Goo|}.WriteLine("Baz");
     }
 }
                         ]]></Document>
@@ -395,7 +403,7 @@ class C1
         <WorkItem(579200, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/579200")>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub Bug579200_RenameNestedAliasTarget()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                 <Workspace>
                     <Project Language="C#" CommonReferences="true">
                         <Document><![CDATA[
@@ -423,7 +431,7 @@ namespace N
         <WorkItem(579214, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/579214")>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub Bug579214_RenameAttributeNamedDynamic()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                 <Workspace>
                     <Project Language="C#" CommonReferences="true">
                         <Document><![CDATA[
@@ -431,7 +439,7 @@ using [|dynamic|] = System;
 class C : [|$$dynamic|]::Object { }
                         ]]></Document>
                     </Project>
-                </Workspace>, renameTo:="foo")
+                </Workspace>, renameTo:="goo")
 
             End Using
         End Sub
@@ -440,19 +448,19 @@ class C : [|$$dynamic|]::Object { }
         <WorkItem(629695, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/629695")>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub Bug629695_DetectConflictWithAliasInSameBlockCompUnit()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                 <Workspace>
                     <Project Language="C#" CommonReferences="true">
                         <Document><![CDATA[
 using {|declconflict:Bar|} = A.B;
-using [|$$Foo|] = A.C; // Rename Foo to Bar
+using [|$$Goo|] = A.C; // Rename Goo to Bar
 
 namespace A{    
     class C
     {        
         public class B        
         {            
-            public class Foo            
+            public class Goo            
             { 
             }         
         }    
@@ -461,15 +469,15 @@ namespace A{
 
 namespace A.B.B
 {    
-    class Foo { }
+    class Goo { }
 }
 
 class Program
 {
     static void Main(string[] args)    
     {        
-        Bar.B.Foo b;        
-        {|stmt1:Foo|}.B.Foo c;
+        Bar.B.Goo b;        
+        {|stmt1:Goo|}.B.Goo c;
      }
 }
                         ]]></Document>
@@ -477,7 +485,7 @@ class Program
                 </Workspace>, renameTo:="Bar")
 
                 result.AssertLabeledSpansAre("declconflict", type:=RelatedLocationType.UnresolvedConflict)
-                result.AssertLabeledSpansAre("stmt1", "A.C.B.Foo c;", type:=RelatedLocationType.ResolvedReferenceConflict)
+                result.AssertLabeledSpansAre("stmt1", "A.C.B.Goo c;", type:=RelatedLocationType.ResolvedReferenceConflict)
             End Using
         End Sub
 
@@ -485,7 +493,7 @@ class Program
         <WorkItem(629695, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/629695")>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub Bug629695_DetectConflictWithAliasInSameBlockNSDecl()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                 <Workspace>
                     <Project Language="C#" CommonReferences="true">
                         <Document><![CDATA[
@@ -494,7 +502,7 @@ namespace A{
     {        
         public class B        
         {            
-            public class Foo            
+            public class Goo            
             { 
             }         
         }    
@@ -503,20 +511,20 @@ namespace A{
 
 namespace A.B.B
 {    
-    class Foo { }
+    class Goo { }
 }
 
 namespace X
 {
     using {|declconflict:Bar|} = A.B;
-    using [|$$Foo|] = A.C; // Rename Foo to Bar
+    using [|$$Goo|] = A.C; // Rename Goo to Bar
 
     class Program
     {
         static void Main(string[] args)    
         {        
-            Bar.B.Foo b;        
-            {|stmt1:Foo|}.B.Foo c;
+            Bar.B.Goo b;        
+            {|stmt1:Goo|}.B.Goo c;
          }
     }
 }
@@ -525,7 +533,7 @@ namespace X
                 </Workspace>, renameTo:="Bar")
 
                 result.AssertLabeledSpansAre("declconflict", type:=RelatedLocationType.UnresolvedConflict)
-                result.AssertLabeledSpansAre("stmt1", "A.C.B.Foo c;", type:=RelatedLocationType.ResolvedReferenceConflict)
+                result.AssertLabeledSpansAre("stmt1", "A.C.B.Goo c;", type:=RelatedLocationType.ResolvedReferenceConflict)
             End Using
         End Sub
 
@@ -533,7 +541,7 @@ namespace X
         <WorkItem(629695, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/629695")>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub Bug629695_DetectConflictWithAliasInSameBlockWithEscaping()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                 <Workspace>
                     <Project Language="C#" CommonReferences="true">
                         <Document><![CDATA[
@@ -542,7 +550,7 @@ namespace A{
     {        
         public class B        
         {            
-            public class Foo            
+            public class Goo            
             { 
             }         
         }    
@@ -551,20 +559,20 @@ namespace A{
 
 namespace A.B.B
 {    
-    class Foo { }
+    class Goo { }
 }
 
 namespace X
 {
     using {|declconflict:@Bar|} = A.B;
-    using [|$$Foo|] = A.C; // Rename Foo to Bar
+    using [|$$Goo|] = A.C; // Rename Goo to Bar
 
     class Program
     {
         static void Main(string[] args)    
         {        
-            Bar.B.Foo b;        
-            {|stmt1:Foo|}.B.Foo c;
+            Bar.B.Goo b;        
+            {|stmt1:Goo|}.B.Goo c;
          }
     }
 }
@@ -573,7 +581,7 @@ namespace X
                 </Workspace>, renameTo:="B\u0061r")
 
                 result.AssertLabeledSpansAre("declconflict", type:=RelatedLocationType.UnresolvedConflict)
-                result.AssertLabeledSpansAre("stmt1", "A.C.B.Foo c;", type:=RelatedLocationType.ResolvedReferenceConflict)
+                result.AssertLabeledSpansAre("stmt1", "A.C.B.Goo c;", type:=RelatedLocationType.ResolvedReferenceConflict)
             End Using
         End Sub
 
@@ -581,7 +589,7 @@ namespace X
         <WorkItem(603365, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/603365"), WorkItem(745833, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/745833")>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub Bug603365_RenameAliasToClassNameOnlyFixesAliasUsages_1()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                 <Workspace>
                     <Project Language="C#" CommonReferences="true">
                         <Document><![CDATA[
@@ -609,7 +617,7 @@ namespace N
         <WorkItem(603365, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/603365")>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub Bug603365_RenameAliasToClassNameOnlyFixesAliasUsages_2()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                 <Workspace>
                     <Project Language="C#" CommonReferences="true">
                         <Document><![CDATA[
@@ -639,22 +647,22 @@ namespace N
         <WorkItem(632303, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/632303")>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub RenameAliasToAttributeAndEndingWithAttributeAttribute()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                 <Workspace>
                     <Project Language="C#" CommonReferences="true">
                         <Document><![CDATA[
-using [|$$FooAttribute|] = System.ObsoleteAttribute;
+using [|$$GooAttribute|] = System.ObsoleteAttribute;
 
-[{|long:FooAttribute|}]
+[{|long:GooAttribute|}]
 class C{ }
 
-[{|short:Foo|}]
+[{|short:Goo|}]
 class D{ }
 
-[{|long:FooAttribute|}()]
+[{|long:GooAttribute|}()]
 class B{ }
 
-[{|short:Foo|}()] 
+[{|short:Goo|}()] 
 class Program
 {    
     static void Main(string[] args)    
@@ -674,23 +682,23 @@ class Program
         <WorkItem(632303, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/632303")>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub RenameAliasToAttributeAndEndingWithAttributeAttributeWithResolvedConflict()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                 <Workspace>
                     <Project Language="C#" CommonReferences="true">
                         <Document><![CDATA[
-using [|$$FooAttribute|] = System.ObsoleteAttribute;
+using [|$$GooAttribute|] = System.ObsoleteAttribute;
 using Bar = System.ContextStaticAttribute;
 
-[{|long1:FooAttribute|}]
+[{|long1:GooAttribute|}]
 class C{ }
 
-[{|short1:Foo|}]
+[{|short1:Goo|}]
 class D{ }
 
-[{|long2:FooAttribute|}()]
+[{|long2:GooAttribute|}()]
 class B{ }
 
-[{|short2:Foo|}()] 
+[{|short2:Goo|}()] 
 class Program
 {    
     static void Main(string[] args)    
@@ -711,7 +719,7 @@ class Program
         <WorkItem(529531, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/529531")>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub RenameAliasToNullableWithResolvedConflict()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                 <Workspace>
                     <Project Language="C#" CommonReferences="true">
                         <Document><![CDATA[

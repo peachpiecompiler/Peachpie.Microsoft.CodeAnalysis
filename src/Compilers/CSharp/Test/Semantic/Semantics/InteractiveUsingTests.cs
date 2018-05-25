@@ -135,7 +135,7 @@ using System;
                 Diagnostic(ErrorCode.ERR_SingleTypeNameNotFound, "Int32").WithArguments("Int32").WithLocation(2, 11)
             };
 
-            CreateCompilationWithMscorlib(source).GetDiagnostics().Where(d => d.Severity > DiagnosticSeverity.Hidden).Verify(expectedDiagnostics);
+            CreateCompilation(source).GetDiagnostics().Where(d => d.Severity > DiagnosticSeverity.Hidden).Verify(expectedDiagnostics);
             CreateSubmission(source).GetDiagnostics().Verify(expectedDiagnostics);
         }
 
@@ -154,7 +154,7 @@ using I = Int32;
 
             var options = TestOptions.DebugDll.WithUsings("System");
 
-            CreateCompilationWithMscorlib(source, options: options).GetDiagnostics().Where(d => d.Severity > DiagnosticSeverity.Hidden).Verify(expectedDiagnostics);
+            CreateCompilation(source, options: options).GetDiagnostics().Where(d => d.Severity > DiagnosticSeverity.Hidden).Verify(expectedDiagnostics);
             CreateSubmission(source, options: options).GetDiagnostics().Verify(expectedDiagnostics);
         }
 
@@ -172,11 +172,11 @@ using J = I;
                 Diagnostic(ErrorCode.ERR_SingleTypeNameNotFound, "I").WithArguments("I").WithLocation(3, 11)
             };
 
-            CreateCompilationWithMscorlib(source).GetDiagnostics().Where(d => d.Severity > DiagnosticSeverity.Hidden).Verify(expectedDiagnostics);
+            CreateCompilation(source).GetDiagnostics().Where(d => d.Severity > DiagnosticSeverity.Hidden).Verify(expectedDiagnostics);
             CreateSubmission(source).GetDiagnostics().Verify(expectedDiagnostics);
         }
 
-        [Fact(Skip = "https://github.com/dotnet/roslyn/issues/5927")]
+        [Fact]
         public void AliasHiding()
         {
             var sub1 = CreateSubmission("using A = System.Int32; typeof(A)");
@@ -244,7 +244,7 @@ using System.IO;
                 Diagnostic(ErrorCode.ERR_SingleTypeNameNotFound, "Path").WithArguments("Path").WithLocation(2, 14)
             };
 
-            CreateCompilationWithMscorlib(source).GetDiagnostics().Where(d => d.Severity > DiagnosticSeverity.Hidden).Verify(expectedDiagnostics);
+            CreateCompilation(source).GetDiagnostics().Where(d => d.Severity > DiagnosticSeverity.Hidden).Verify(expectedDiagnostics);
             CreateSubmission(source).GetDiagnostics().Verify(expectedDiagnostics);
         }
 
@@ -263,7 +263,7 @@ using static Path;
 
             var options = TestOptions.DebugDll.WithUsings("System");
 
-            CreateCompilationWithMscorlib(source, options: options).GetDiagnostics().Where(d => d.Severity > DiagnosticSeverity.Hidden).Verify(expectedDiagnostics);
+            CreateCompilation(source, options: options).GetDiagnostics().Where(d => d.Severity > DiagnosticSeverity.Hidden).Verify(expectedDiagnostics);
             CreateSubmission(source, options: options).GetDiagnostics().Verify(expectedDiagnostics);
         }
 
@@ -315,8 +315,8 @@ namespace B
 }}
 ";
 
-            var lib1 = CreateCompilationWithMscorlib(string.Format(libSourceTemplate, 1), assemblyName: "Lib1").EmitToImageReference();
-            var lib2 = CreateCompilationWithMscorlib(string.Format(libSourceTemplate, 2), assemblyName: "Lib2").EmitToImageReference();
+            var lib1 = CreateCompilation(string.Format(libSourceTemplate, 1), assemblyName: "Lib1").EmitToImageReference();
+            var lib2 = CreateCompilation(string.Format(libSourceTemplate, 2), assemblyName: "Lib2").EmitToImageReference();
 
             var options = TestOptions.DebugDll.WithUsings("B");
 
@@ -329,7 +329,7 @@ namespace B
 
         [WorkItem(5423, "https://github.com/dotnet/roslyn/issues/5423")]
         [Fact]
-        void UsingsFromLoadedScript()
+        private void UsingsFromLoadedScript()
         {
             const string scriptSource = @"
 using static System.IO.Path;
@@ -374,7 +374,7 @@ t = typeof(C); // declaration exposed
 
         [WorkItem(5423, "https://github.com/dotnet/roslyn/issues/5423")]
         [Fact]
-        void UsingsToLoadedScript()
+        private void UsingsToLoadedScript()
         {
             const string scriptSource = @"
 using System.Collections.Generic;
@@ -459,7 +459,7 @@ class C { }
         }
 
         [Fact]
-        void GlobalUsingsToLoadedScript()
+        private void GlobalUsingsToLoadedScript()
         {
             const string scriptSource = @"
 System.Type t;
@@ -508,7 +508,7 @@ namespace NOuter
 }
 ";
 
-            var lib = CreateCompilationWithMscorlib(libSource).EmitToImageReference();
+            var lib = CreateCompilation(libSource).EmitToImageReference();
             var refs = new[] { lib };
 
             var submissions = new[]
@@ -549,7 +549,7 @@ namespace NOuter
 }
 ";
 
-            var lib = CreateCompilationWithMscorlib(libSource).EmitToImageReference();
+            var lib = CreateCompilation(libSource).EmitToImageReference();
             var refs = new[] { lib };
 
             CreateSubmission("using NInner;", refs, previous: CreateSubmission("using NOuter;", refs)).VerifyDiagnostics(
@@ -572,7 +572,7 @@ namespace NOuter
                 // using static NInner.CInner;
                 Diagnostic(ErrorCode.ERR_SingleTypeNameNotFound, "NInner").WithArguments("NInner").WithLocation(1, 14));
         }
-        
+
         private static Symbol GetSpeculativeSymbol(CSharpCompilation comp, string name)
         {
             var tree = comp.SyntaxTrees.Single();
@@ -588,8 +588,8 @@ namespace NOuter
             var tree = comp.SyntaxTrees.Single();
             var model = comp.GetSemanticModel(tree);
             return (TypeSymbol)model.GetSpeculativeTypeInfo(
-                tree.Length, 
-                SyntaxFactory.IdentifierName(name), 
+                tree.Length,
+                SyntaxFactory.IdentifierName(name),
                 SpeculativeBindingOption.BindAsTypeOrNamespace).Type;
         }
     }

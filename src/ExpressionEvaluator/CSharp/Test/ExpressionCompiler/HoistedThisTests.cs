@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Immutable;
@@ -9,6 +9,7 @@ using Microsoft.CodeAnalysis.CSharp.Test.Utilities;
 using Microsoft.CodeAnalysis.CSharp.UnitTests;
 using Microsoft.CodeAnalysis.ExpressionEvaluator;
 using Microsoft.CodeAnalysis.ExpressionEvaluator.UnitTests;
+using Microsoft.CodeAnalysis.PooledObjects;
 using Microsoft.CodeAnalysis.Test.Utilities;
 using Roslyn.Test.Utilities;
 using Xunit;
@@ -775,7 +776,7 @@ static class C
 } // end of class C
 ";
             var module = ExpressionCompilerTestHelpers.GetModuleInstanceForIL(ilSource);
-            var runtime = CreateRuntimeInstance(module, new[] { MscorlibRef });            
+            var runtime = CreateRuntimeInstance(module, new[] { MscorlibRef });
             var context = CreateMethodContext(runtime, "C.<M>b__0");
             VerifyNoThis(context);
         }
@@ -848,10 +849,10 @@ class C
   IL_0006:  ret
 }}";
 
-            var comp = CreateCompilationWithMscorlib(source, options: TestOptions.DebugDll, assemblyName: ExpressionCompilerUtilities.GenerateUniqueName());
+            var comp = CreateCompilation(source, options: TestOptions.DebugDll, assemblyName: ExpressionCompilerUtilities.GenerateUniqueName());
             WithRuntimeInstance(comp, runtime =>
             {
-                var dummyComp = CreateCompilationWithMscorlib("", new[] { comp.EmitToImageReference() }, options: TestOptions.DebugDll.WithMetadataImportOptions(MetadataImportOptions.All));
+                var dummyComp = CreateCompilation("", new[] { comp.EmitToImageReference() }, options: TestOptions.DebugDll.WithMetadataImportOptions(MetadataImportOptions.All));
                 var typeC = dummyComp.GlobalNamespace.GetMember<NamedTypeSymbol>("C");
                 var displayClassTypes = typeC.GetMembers().OfType<NamedTypeSymbol>();
                 Assert.True(displayClassTypes.Any());
@@ -911,10 +912,10 @@ class C
 }
 ";
 
-            var comp = CreateCompilationWithMscorlib(source, options: TestOptions.DebugDll, assemblyName: ExpressionCompilerUtilities.GenerateUniqueName());
-            WithRuntimeInstancePortableBug(comp, runtime =>
+            var comp = CreateCompilation(source, options: TestOptions.DebugDll, assemblyName: ExpressionCompilerUtilities.GenerateUniqueName());
+            WithRuntimeInstance(comp, runtime =>
             {
-                var dummyComp = CreateCompilationWithMscorlib("", new[] { comp.EmitToImageReference() }, options: TestOptions.DebugDll.WithMetadataImportOptions(MetadataImportOptions.All));
+                var dummyComp = CreateCompilation("", new[] { comp.EmitToImageReference() }, options: TestOptions.DebugDll.WithMetadataImportOptions(MetadataImportOptions.All));
                 var typeC = dummyComp.GlobalNamespace.GetMember<NamedTypeSymbol>("C");
                 var displayClassTypes = typeC.GetMembers().OfType<NamedTypeSymbol>();
                 Assert.True(displayClassTypes.Any());
@@ -935,7 +936,7 @@ class C
         private void VerifyHasThis(string source, string methodName, string expectedType, string expectedIL, bool thisCanBeElided = true)
         {
             var sourceCompilation = CreateCompilationWithMscorlib45(source, options: TestOptions.DebugDll, assemblyName: ExpressionCompilerUtilities.GenerateUniqueName());
-            WithRuntimeInstancePortableBug(sourceCompilation, runtime =>
+            WithRuntimeInstance(sourceCompilation, runtime =>
             {
                 var context = CreateMethodContext(runtime, methodName);
                 VerifyHasThis(context, expectedType, expectedIL);
@@ -943,7 +944,7 @@ class C
 
             // Now recompile and test CompileExpression with optimized code.
             sourceCompilation = sourceCompilation.WithOptions(sourceCompilation.Options.WithOptimizationLevel(OptimizationLevel.Release));
-            WithRuntimeInstancePortableBug(sourceCompilation, runtime =>
+            WithRuntimeInstance(sourceCompilation, runtime =>
             {
                 var context = CreateMethodContext(runtime, methodName);
                 // In C#, "this" may be optimized away.
@@ -972,10 +973,11 @@ class C
             var assembly = context.CompileGetLocals(locals, argumentsOnly: false, typeName: out typeName, testData: testData);
             Assert.NotNull(assembly);
             Assert.NotEqual(assembly.Count, 0);
+            var methods = testData.GetMethodsByName();
             var localAndMethod = locals.Single(l => l.LocalName == "this");
             if (expectedIL != null)
             {
-                VerifyMethodData(testData.Methods.Single(m => m.Key.Contains(localAndMethod.MethodName)).Value, expectedType, expectedIL);
+                VerifyMethodData(methods.Single(m => m.Key.Contains(localAndMethod.MethodName)).Value, expectedType, expectedIL);
             }
             locals.Free();
 
@@ -985,7 +987,7 @@ class C
             Assert.Null(error);
             if (expectedIL != null)
             {
-                VerifyMethodData(testData.Methods.Single(m => m.Key.Contains("<>m0")).Value, expectedType, expectedIL);
+                VerifyMethodData(methods.Single(m => m.Key.Contains("<>m0")).Value, expectedType, expectedIL);
             }
         }
 
@@ -1044,8 +1046,8 @@ class C
         yield return this.x;
     }
 }";
-            var compilation0 = CreateCompilationWithMscorlib(source, options: TestOptions.DebugDll);
-            WithRuntimeInstancePortableBug(compilation0, runtime =>
+            var compilation0 = CreateCompilation(source, options: TestOptions.DebugDll);
+            WithRuntimeInstance(compilation0, runtime =>
             {
                 var context = CreateMethodContext(runtime, "C.<F>d__1.MoveNext");
                 string error;
@@ -1081,7 +1083,7 @@ class C
     }
 }";
             var compilation0 = CreateCompilationWithMscorlib45(source, options: TestOptions.DebugDll);
-            WithRuntimeInstancePortableBug(compilation0, runtime =>
+            WithRuntimeInstance(compilation0, runtime =>
             {
                 var context = CreateMethodContext(runtime, "C.<F>d__1.MoveNext");
                 string error;
@@ -1117,8 +1119,8 @@ class C
         a();
     }
 }";
-            var compilation0 = CreateCompilationWithMscorlib(source, options: TestOptions.DebugDll);
-            WithRuntimeInstancePortableBug(compilation0, runtime =>
+            var compilation0 = CreateCompilation(source, options: TestOptions.DebugDll);
+            WithRuntimeInstance(compilation0, runtime =>
             {
                 var context = CreateMethodContext(runtime, "C.<F>b__1_0");
                 string error;
@@ -1153,8 +1155,8 @@ class Derived : Base
         yield return base.x;
     }
 }";
-            var compilation0 = CreateCompilationWithMscorlib(source, options: TestOptions.DebugDll);
-            WithRuntimeInstancePortableBug(compilation0, runtime =>
+            var compilation0 = CreateCompilation(source, options: TestOptions.DebugDll);
+            WithRuntimeInstance(compilation0, runtime =>
             {
                 var context = CreateMethodContext(runtime, "Derived.<M>d__1.MoveNext");
                 string error;
@@ -1195,7 +1197,7 @@ class Derived : Base
     }
 }";
             var compilation0 = CreateCompilationWithMscorlib45(source, options: TestOptions.DebugDll);
-            WithRuntimeInstancePortableBug(compilation0, runtime =>
+            WithRuntimeInstance(compilation0, runtime =>
             {
                 var context = CreateMethodContext(runtime, "Derived.<M>d__1.MoveNext");
                 string error;
@@ -1236,8 +1238,8 @@ class Derived : Base
         a();
     }
 }";
-            var compilation0 = CreateCompilationWithMscorlib(source, options: TestOptions.DebugDll);
-            WithRuntimeInstancePortableBug(compilation0, runtime =>
+            var compilation0 = CreateCompilation(source, options: TestOptions.DebugDll);
+            WithRuntimeInstance(compilation0, runtime =>
             {
                 var context = CreateMethodContext(runtime, "Derived.<F>b__1_0");
                 string error;
@@ -1430,9 +1432,9 @@ public class C
 
         private static void CheckIteratorOverloading(string source, Func<MethodSymbol, bool> isDesiredOverload)
         {
-            var comp1 = CreateCompilationWithMscorlib(source, options: TestOptions.DebugDll);
+            var comp1 = CreateCompilation(source, options: TestOptions.DebugDll);
             var ref1 = comp1.EmitToImageReference();
-            var comp2 = CreateCompilationWithMscorlib("", new[] { ref1 }, options: TestOptions.DebugDll);
+            var comp2 = CreateCompilation("", new[] { ref1 }, options: TestOptions.DebugDll);
 
             var originalType = comp2.GlobalNamespace.GetMember<NamedTypeSymbol>("C");
             var iteratorMethod = originalType.GetMembers("M").OfType<MethodSymbol>().Single(isDesiredOverload);

@@ -1,10 +1,11 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Diagnostics;
 using System.Globalization;
 using System.Reflection;
 using Microsoft.CodeAnalysis.Collections;
+using Microsoft.CodeAnalysis.PooledObjects;
 using static Microsoft.CodeAnalysis.Scripting.Hosting.ObjectFormatterHelpers;
 
 namespace Microsoft.CodeAnalysis.Scripting.Hosting
@@ -54,7 +55,7 @@ namespace Microsoft.CodeAnalysis.Scripting.Hosting
                 arrayBoundRadix: printOptions.NumberRadix,
                 showNamespaces: false);
 
-        public override string FormatUnhandledException(Exception e)
+        public override string FormatException(Exception e)
         {
             if (e == null)
             {
@@ -101,7 +102,7 @@ namespace Microsoft.CodeAnalysis.Scripting.Hosting
         /// Returns a method signature display string. Used to display stack frames.
         /// </summary>
         /// <returns>Null if the method is a compiler generated method that shouldn't be displayed to the user.</returns>
-        protected virtual string FormatMethodSignature(MethodBase method)
+        protected internal virtual string FormatMethodSignature(MethodBase method)
         {
             var pooled = PooledStringBuilder.GetInstance();
             var builder = pooled.Builder;
@@ -112,7 +113,10 @@ namespace Microsoft.CodeAnalysis.Scripting.Hosting
             builder.Append(TypeNameFormatter.FormatTypeName(declaringType, options));
             builder.Append('.');
             builder.Append(method.Name);
-            builder.Append(TypeNameFormatter.FormatTypeArguments(method.GetGenericArguments(), options));
+            if (method.IsGenericMethod)
+            {
+                builder.Append(TypeNameFormatter.FormatTypeArguments(method.GetGenericArguments(), options));
+            }
 
             builder.Append('(');
 
@@ -128,8 +132,16 @@ namespace Microsoft.CodeAnalysis.Scripting.Hosting
                     builder.Append(", ");
                 }
 
-                builder.Append(FormatRefKind(parameter));
-                builder.Append(TypeNameFormatter.FormatTypeName(parameter.ParameterType, options));
+                if (parameter.ParameterType.IsByRef)
+                {
+                    builder.Append(FormatRefKind(parameter));
+                    builder.Append(' ');
+                    builder.Append(TypeNameFormatter.FormatTypeName(parameter.ParameterType.GetElementType(), options));
+                }
+                else
+                {
+                    builder.Append(TypeNameFormatter.FormatTypeName(parameter.ParameterType, options));
+                }
             }
 
             builder.Append(')');

@@ -1,11 +1,16 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
-using System.ComponentModel.Composition.Hosting;
+using System.Collections.Generic;
+using System.ComponentModel.Composition;
 using System.Linq;
-using Microsoft.VisualStudio.Utilities;
-using Microsoft.VisualStudio.InteractiveWindow;
+using Microsoft.CodeAnalysis.Editor.UnitTests;
 using Microsoft.CodeAnalysis.Editor.UnitTests.Utilities;
+using Microsoft.CodeAnalysis.Test.Utilities;
+using Microsoft.VisualStudio.Composition;
+using Microsoft.VisualStudio.InteractiveWindow;
+using Microsoft.VisualStudio.Text.Utilities;
+using Microsoft.VisualStudio.Utilities;
 
 namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.Interactive
 {
@@ -14,58 +19,60 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.Interactive
         internal readonly IInteractiveWindow Window;
         internal readonly TestInteractiveEvaluator Evaluator;
 
-        private readonly CompositionContainer ExportProvider;
+        private readonly System.ComponentModel.Composition.Hosting.ExportProvider _exportProvider;
 
-        private static readonly Lazy<AggregateCatalog> _lazyCatalog = new Lazy<AggregateCatalog>(() =>
+        internal static readonly IExportProviderFactory ExportProviderFactory = ExportProviderCache.GetOrCreateExportProviderFactory(
+            ExportProviderCache.GetOrCreateAssemblyCatalog(
+                new[]
+                {
+                    typeof(TestWaitIndicator).Assembly,
+                    typeof(TestInteractiveEvaluator).Assembly,
+                    typeof(IInteractiveWindow).Assembly
+                }
+                .Concat(TestExportProvider.GetCSharpAndVisualBasicAssemblies())
+                .Concat(MinimalTestExportProvider.GetEditorAssemblies())));
+
+        // Provide an export of ILoggingServiceInternal to work around https://devdiv.visualstudio.com/DevDiv/_workitems/edit/570290
+        [Export(typeof(ILoggingServiceInternal))]
+        private sealed class HACK_LoggingProvider : ILoggingServiceInternal
         {
-            var types = new[] { typeof(TestWaitIndicator), typeof(TestInteractiveEvaluator), typeof(InteractiveWindow) }.Concat(GetVisualStudioTypes());
-            return new AggregateCatalog(types.Select(t => new AssemblyCatalog(t.Assembly)));
-        });
+            public void AdjustCounter(string key, string name, int delta = 1)
+            {
+            }
 
-        internal InteractiveWindowTestHost(Action<InteractiveWindow.State> stateChangedHandler = null)
-        {
-            ExportProvider = new CompositionContainer(
-                _lazyCatalog.Value,
-                CompositionOptions.DisableSilentRejection | CompositionOptions.IsThreadSafe);
+            public void PostCounters()
+            {
+            }
 
-            var contentTypeRegistryService = ExportProvider.GetExport<IContentTypeRegistryService>().Value;
-            Evaluator = new TestInteractiveEvaluator();
-            Window = ExportProvider.GetExport<IInteractiveWindowFactoryService>().Value.CreateWindow(Evaluator);
-            ((InteractiveWindow)Window).StateChanged += stateChangedHandler;
-            Window.InitializeAsync().Wait();
+            public void PostEvent(string key, params object[] namesAndProperties)
+            {
+            }
+
+            public void PostEvent(string key, IReadOnlyList<object> namesAndProperties)
+            {
+            }
+
+            public void PostEvent(TelemetryEventType eventType, string eventName, TelemetryResult result = TelemetryResult.Success, params (string name, object property)[] namesAndProperties)
+            {
+            }
+
+            public void PostEvent(TelemetryEventType eventType, string eventName, TelemetryResult result, IReadOnlyList<(string name, object property)> namesAndProperties)
+            {
+            }
+
+            public void PostFault(string eventName, string description, Exception exceptionObject, string additionalErrorInfo, bool? isIncludedInWatsonSample)
+            {
+            }
         }
 
-        private static Type[] GetVisualStudioTypes()
+        internal InteractiveWindowTestHost(ExportProvider exportProvider)
         {
-            var types = new[]
-            {
-                // EDITOR
+            _exportProvider = exportProvider.AsExportProvider();
 
-                // Microsoft.VisualStudio.Platform.VSEditor.dll:
-                typeof(VisualStudio.Platform.VSEditor.EventArgsHelper),
-
-                // Microsoft.VisualStudio.Text.Logic.dll:
-                //   Must include this because several editor options are actually stored as exported information 
-                //   on this DLL.  Including most importantly, the tab size information.
-                typeof(VisualStudio.Text.Editor.DefaultOptions),
-
-                // Microsoft.VisualStudio.Text.UI.dll:
-                //   Include this DLL to get several more EditorOptions including WordWrapStyle.
-                typeof(VisualStudio.Text.Editor.WordWrapStyle),
-
-                // Microsoft.VisualStudio.Text.UI.Wpf.dll:
-                //   Include this DLL to get more EditorOptions values.
-                typeof(VisualStudio.Text.Editor.HighlightCurrentLineOption),
-
-                // BasicUndo.dll:
-                //   Include this DLL to satisfy ITextUndoHistoryRegistry
-                typeof(BasicUndo.IBasicUndoHistory),
-
-                // Microsoft.VisualStudio.Language.StandardClassification.dll:
-                typeof(VisualStudio.Language.StandardClassification.PredefinedClassificationTypeNames)
-            };
-
-            return types;
+            var contentTypeRegistryService = _exportProvider.GetExport<IContentTypeRegistryService>().Value;
+            Evaluator = new TestInteractiveEvaluator();
+            Window = _exportProvider.GetExport<IInteractiveWindowFactoryService>().Value.CreateWindow(Evaluator);
+            Window.InitializeAsync().Wait();
         }
 
         public void Dispose()

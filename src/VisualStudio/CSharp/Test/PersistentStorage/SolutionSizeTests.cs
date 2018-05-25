@@ -3,12 +3,15 @@
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.CodeAnalysis.SolutionCrawler;
+using Microsoft.CodeAnalysis.SolutionSize;
+using Microsoft.CodeAnalysis.Test.Utilities;
 using Microsoft.CodeAnalysis.Text;
-using Microsoft.VisualStudio.LanguageServices.Implementation.SolutionSize;
 using Xunit;
 
 namespace Microsoft.CodeAnalysis.UnitTests.WorkspaceServices
 {
+    [UseExportProvider]
     public class SolutionSizeTests
     {
         [Fact]
@@ -46,7 +49,7 @@ namespace Microsoft.CodeAnalysis.UnitTests.WorkspaceServices
             var text = SourceText.From(new string('2', 1000));
             var newDocument = document.WithText(text);
 
-            await analyzer.AnalyzeSyntaxAsync(newDocument, CancellationToken.None);
+            await analyzer.AnalyzeSyntaxAsync(newDocument, InvocationReasons.DocumentChanged, CancellationToken.None);
 
             var size = analyzer.GetSolutionSize(solution.Id);
             Assert.Equal(expected - length + text.Length, size);
@@ -78,7 +81,7 @@ namespace Microsoft.CodeAnalysis.UnitTests.WorkspaceServices
         {
             foreach (var document in solution.Projects.SelectMany(p => p.Documents))
             {
-                await analyzer.AnalyzeSyntaxAsync(document, CancellationToken.None);
+                await analyzer.AnalyzeSyntaxAsync(document, InvocationReasons.Empty, CancellationToken.None);
             }
         }
 

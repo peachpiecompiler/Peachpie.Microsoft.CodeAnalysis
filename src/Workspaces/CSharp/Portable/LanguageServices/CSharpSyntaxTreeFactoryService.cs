@@ -15,6 +15,8 @@ namespace Microsoft.CodeAnalysis.CSharp
     [ExportLanguageServiceFactory(typeof(ISyntaxTreeFactoryService), LanguageNames.CSharp), Shared]
     internal partial class CSharpSyntaxTreeFactoryServiceFactory : ILanguageServiceFactory
     {
+        private static readonly CSharpParseOptions _parseOptionWithLatestLanguageVersion = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Latest);
+
         public ILanguageService CreateLanguageService(HostLanguageServices provider)
         {
             return new CSharpSyntaxTreeFactoryService(provider);
@@ -31,6 +33,11 @@ namespace Microsoft.CodeAnalysis.CSharp
                 return CSharpParseOptions.Default;
             }
 
+            public override ParseOptions GetDefaultParseOptionsWithLatestLanguageVersion()
+            {
+                return _parseOptionWithLatestLanguageVersion;
+            }
+
             public override SyntaxTree CreateSyntaxTree(string fileName, ParseOptions options, Encoding encoding, SyntaxNode root)
             {
                 options = options ?? GetDefaultParseOptions();
@@ -44,9 +51,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             }
 
             public override SyntaxNode DeserializeNodeFrom(Stream stream, CancellationToken cancellationToken)
-            {
-                return CSharpSyntaxNode.DeserializeFrom(stream, cancellationToken);
-            }
+                => CSharpSyntaxNode.DeserializeFrom(stream, cancellationToken);
 
             public override bool CanCreateRecoverableTree(SyntaxNode root)
             {

@@ -26,8 +26,8 @@ public class C
 
             var tree = Parse(source, "file.cs");
 
-            var libRef = CreateCompilationWithMscorlib(tree, assemblyName: "Metadata").EmitToImageReference();
-            var comp = CreateCompilationWithMscorlib(tree, new[] { libRef }, assemblyName: "Source");
+            var libRef = CreateCompilation(tree, assemblyName: "Metadata").EmitToImageReference();
+            var comp = CreateCompilation(tree, new[] { libRef }, assemblyName: "Source");
 
             SymbolDistinguisher distinguisher;
 
@@ -70,8 +70,8 @@ public class C
         {
             var source = @"public class C { }";
 
-            var libRef = new CSharpCompilationReference(CreateCompilationWithMscorlib(Parse(source, "file1.cs"), assemblyName: "Metadata"));
-            var comp = CreateCompilationWithMscorlib(Parse(source, "file2.cs"), new[] { libRef }, assemblyName: "Source");
+            var libRef = new CSharpCompilationReference(CreateCompilation(Parse(source, "file1.cs"), assemblyName: "Metadata"));
+            var comp = CreateCompilation(Parse(source, "file2.cs"), new[] { libRef }, assemblyName: "Source");
 
             var sourceAssembly = comp.SourceAssembly;
             var referencedAssembly = (AssemblySymbol)comp.GetAssemblyOrModuleSymbol(libRef);
@@ -90,9 +90,9 @@ public class C
 
             var tree = Parse(source, "file.cs");
 
-            var libComp = CreateCompilationWithMscorlib(tree, assemblyName: "Metadata");
+            var libComp = CreateCompilation(tree, assemblyName: "Metadata");
             var libRef = MetadataReference.CreateFromImage(libComp.EmitToArray(), filePath: "Metadata.dll");
-            var comp = CreateCompilationWithMscorlib(tree, new[] { libRef }, assemblyName: "Source");
+            var comp = CreateCompilation(tree, new[] { libRef }, assemblyName: "Source");
 
             var sourceAssembly = comp.SourceAssembly;
             var referencedAssembly = (AssemblySymbol)comp.GetAssemblyOrModuleSymbol(libRef);
@@ -110,8 +110,8 @@ public class C
             var source = @"public class C { }";
             var tree = Parse(source, "file.cs");
 
-            var libRef = new CSharpCompilationReference(CreateCompilationWithMscorlib(tree, assemblyName: "Metadata"));
-            var comp = CreateCompilationWithMscorlib(tree, new[] { libRef }, assemblyName: "Source");
+            var libRef = new CSharpCompilationReference(CreateCompilation(tree, assemblyName: "Metadata"));
+            var comp = CreateCompilation(tree, new[] { libRef }, assemblyName: "Source");
 
             var sourceAssembly = comp.SourceAssembly;
             var referencedAssembly = (AssemblySymbol)comp.GetAssemblyOrModuleSymbol(libRef);
@@ -130,10 +130,10 @@ public class C
 
             var tree = Parse(source, @"a\..\file.cs");
 
-            var libComp = CreateCompilationWithMscorlib(tree, assemblyName: "Metadata");
+            var libComp = CreateCompilation(tree, assemblyName: "Metadata");
             var libRef = MetadataReference.CreateFromImage(libComp.EmitToArray(), filePath: "Metadata.dll");
 
-            var comp = CreateCompilationWithMscorlib(tree, new[] { libRef }, assemblyName: "Source");
+            var comp = CreateCompilation(tree, new[] { libRef }, assemblyName: "Source");
 
             var sourceAssembly = comp.SourceAssembly;
             var referencedAssembly = (AssemblySymbol)comp.GetAssemblyOrModuleSymbol(libRef);
@@ -151,8 +151,8 @@ public class C
         {
             var source = @"public class C { }";
 
-            var libRef = CreateCompilationWithMscorlib(source, assemblyName: "Metadata").EmitToImageReference();
-            var comp = CreateCompilationWithMscorlib(source, new[] { libRef }, assemblyName: "Source");
+            var libRef = CreateCompilation(source, assemblyName: "Metadata").EmitToImageReference();
+            var comp = CreateCompilation(source, new[] { libRef }, assemblyName: "Source");
 
             var sourceAssembly = comp.SourceAssembly;
             var referencedAssembly = (AssemblySymbol)comp.GetAssemblyOrModuleSymbol(libRef);
@@ -175,8 +175,8 @@ public class C
 ";
             var tree = Parse(source, "file.cs");
 
-            var libRef = CreateCompilationWithMscorlib(tree, assemblyName: "Metadata").EmitToImageReference();
-            var comp = CreateCompilationWithMscorlib(tree, new[] { libRef }, assemblyName: "Source");
+            var libRef = CreateCompilation(tree, assemblyName: "Metadata").EmitToImageReference();
+            var comp = CreateCompilation(tree, new[] { libRef }, assemblyName: "Source");
 
             var sourceAssembly = comp.SourceAssembly;
             var referencedAssembly = (AssemblySymbol)comp.GetAssemblyOrModuleSymbol(libRef);
@@ -201,8 +201,8 @@ public class C
 ";
             var tree = Parse(source, "file.cs");
 
-            var libRef = CreateCompilationWithMscorlib(tree, assemblyName: "Metadata").EmitToImageReference();
-            var comp = CreateCompilationWithMscorlib(tree, new[] { libRef }, assemblyName: "Source");
+            var libRef = CreateCompilation(tree, assemblyName: "Metadata").EmitToImageReference();
+            var comp = CreateCompilation(tree, new[] { libRef }, assemblyName: "Source");
 
             var sourceAssembly = comp.SourceAssembly;
             var referencedAssembly = (AssemblySymbol)comp.GetAssemblyOrModuleSymbol(libRef);
@@ -226,8 +226,8 @@ unsafe public struct S
 ";
             var tree = Parse(source, "file.cs");
 
-            var libRef = CreateCompilationWithMscorlib(tree, assemblyName: "Metadata", options: TestOptions.UnsafeReleaseDll).EmitToImageReference();
-            var comp = CreateCompilationWithMscorlib(tree, new[] { libRef }, assemblyName: "Source", options: TestOptions.UnsafeReleaseDll);
+            var libRef = CreateCompilation(tree, assemblyName: "Metadata", options: TestOptions.UnsafeReleaseDll).EmitToImageReference();
+            var comp = CreateCompilation(tree, new[] { libRef }, assemblyName: "Source", options: TestOptions.UnsafeReleaseDll);
 
             var sourceAssembly = comp.SourceAssembly;
             var referencedAssembly = (AssemblySymbol)comp.GetAssemblyOrModuleSymbol(libRef);
@@ -251,8 +251,8 @@ public class C
 ";
             var tree = Parse(source, "file.cs");
 
-            var libRef = CreateCompilationWithMscorlib(tree, assemblyName: "Metadata").EmitToImageReference();
-            var comp = CreateCompilationWithMscorlib(tree, new[] { libRef }, assemblyName: "Source");
+            var libRef = CreateCompilation(tree, assemblyName: "Metadata").EmitToImageReference();
+            var comp = CreateCompilation(tree, new[] { libRef }, assemblyName: "Source");
 
             var sourceAssembly = comp.SourceAssembly;
             var referencedAssembly = (AssemblySymbol)comp.GetAssemblyOrModuleSymbol(libRef);
@@ -273,8 +273,8 @@ public class C
 
             var tree = Parse(source, "file.cs");
 
-            var libRef = CreateCompilationWithMscorlib(tree, assemblyName: "Metadata").EmitToImageReference();
-            var comp = CreateCompilationWithMscorlib(tree, new[] { libRef }, assemblyName: "Source");
+            var libRef = CreateCompilation(tree, assemblyName: "Metadata").EmitToImageReference();
+            var comp = CreateCompilation(tree, new[] { libRef }, assemblyName: "Source");
 
             var sourceAssembly = comp.SourceAssembly;
             var referencedAssembly = (AssemblySymbol)comp.GetAssemblyOrModuleSymbol(libRef);
@@ -290,8 +290,8 @@ public class C
         [Fact]
         public void TestDynamicLocation()
         {
-            var libRef = CreateCompilationWithMscorlib("public class dynamic { }", assemblyName: "Metadata").EmitToImageReference();
-            var comp = CreateCompilationWithMscorlib("", new[] { libRef }, assemblyName: "Source");
+            var libRef = CreateCompilation("public class dynamic { }", assemblyName: "Metadata").EmitToImageReference();
+            var comp = CreateCompilation("", new[] { libRef }, assemblyName: "Source");
 
             var sourceAssembly = comp.SourceAssembly;
             var referencedAssembly = (AssemblySymbol)comp.GetAssemblyOrModuleSymbol(libRef);
@@ -307,9 +307,9 @@ public class C
         [Fact]
         public void TestMissingTypeLocation()
         {
-            var dummyComp = CreateCompilation("", assemblyName: "Error");
+            var dummyComp = CreateEmptyCompilation("", assemblyName: "Error");
             var errorType = dummyComp.GetSpecialType(SpecialType.System_Int32);
-            var validType = CreateCompilationWithMscorlib("").GetSpecialType(SpecialType.System_Int32);
+            var validType = CreateEmptyCompilation("", new[] { MscorlibRef }).GetSpecialType(SpecialType.System_Int32);
 
             Assert.NotEqual(TypeKind.Error, validType.TypeKind);
             Assert.Equal(TypeKind.Error, errorType.TypeKind);
@@ -343,8 +343,8 @@ public class C
 }
 ";
 
-            var libRef = CreateCompilationWithMscorlib(libSource, assemblyName: "Metadata").EmitToImageReference();
-            CreateCompilationWithMscorlib(Parse(source, "file.cs"), new[] { libRef }, assemblyName: "Source").VerifyDiagnostics(
+            var libRef = CreateCompilation(libSource, assemblyName: "Metadata").EmitToImageReference();
+            CreateCompilation(Parse(source, "file.cs"), new[] { libRef }, assemblyName: "Source").VerifyDiagnostics(
                 // file.cs(8,9): warning CS0436: The type 'I' in 'file.cs' conflicts with the imported type 'I' in 'Metadata, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null'. Using the type defined in 'file.cs'.
                 //         I i = Lib.M();
                 Diagnostic(ErrorCode.WRN_SameFullNameThisAggAgg, "I").WithArguments("file.cs", "I", "Metadata, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null", "I").WithLocation(8, 9),
@@ -377,8 +377,8 @@ public class C
 }
 ";
 
-            var libRef = CreateCompilationWithMscorlib(libSource, assemblyName: "Metadata").EmitToImageReference();
-            CreateCompilationWithMscorlib(Parse(source, "file.cs"), new[] { libRef }, assemblyName: "Source").VerifyDiagnostics(
+            var libRef = CreateCompilation(libSource, assemblyName: "Metadata").EmitToImageReference();
+            CreateCompilation(Parse(source, "file.cs"), new[] { libRef }, assemblyName: "Source").VerifyDiagnostics(
                 // file.cs(8,9): warning CS0436: The type 'S' in 'file.cs' conflicts with the imported type 'S' in 'Metadata, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null'. Using the type defined in 'file.cs'.
                 //         S s = Lib.M();
                 Diagnostic(ErrorCode.WRN_SameFullNameThisAggAgg, "S").WithArguments("file.cs", "S", "Metadata, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null", "S").WithLocation(8, 9),
@@ -411,8 +411,8 @@ public class C
 }
 ";
 
-            var libRef = CreateCompilationWithMscorlib(libSource, assemblyName: "Metadata").EmitToImageReference();
-            CreateCompilationWithMscorlib(Parse(source, "file.cs"), new[] { libRef }, assemblyName: "Source").VerifyDiagnostics(
+            var libRef = CreateCompilation(libSource, assemblyName: "Metadata").EmitToImageReference();
+            CreateCompilation(Parse(source, "file.cs"), new[] { libRef }, assemblyName: "Source").VerifyDiagnostics(
                 // file.cs(8,18): warning CS0436: The type 'S' in 'file.cs' conflicts with the imported type 'S' in 'Metadata, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null'. Using the type defined in 'file.cs'.
                 //         var s = (S)Lib.M();
                 Diagnostic(ErrorCode.WRN_SameFullNameThisAggAgg, "S").WithArguments("file.cs", "S", "Metadata, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null", "S").WithLocation(8, 18),
@@ -443,8 +443,8 @@ public class C
 }
 ";
 
-            var libRef = CreateCompilationWithMscorlib(libSource, assemblyName: "Metadata").EmitToImageReference();
-            CreateCompilationWithMscorlib(Parse(source, "file.cs"), new[] { libRef }, assemblyName: "Source").VerifyDiagnostics(
+            var libRef = CreateCompilation(libSource, assemblyName: "Metadata").EmitToImageReference();
+            CreateCompilation(Parse(source, "file.cs"), new[] { libRef }, assemblyName: "Source").VerifyDiagnostics(
                 // file.cs(6,28): warning CS0436: The type 'C' in 'file.cs' conflicts with the imported type 'C' in 'Metadata, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null'. Using the type defined in 'file.cs'.
                 //         var c = Lib.M() as C;
                 Diagnostic(ErrorCode.WRN_SameFullNameThisAggAgg, "C").WithArguments("file.cs", "C", "Metadata, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null", "C").WithLocation(6, 28),
@@ -475,8 +475,8 @@ public class C
 }
 ";
 
-            var libRef = CreateCompilationWithMscorlib(libSource, assemblyName: "Metadata").EmitToImageReference();
-            CreateCompilationWithMscorlib(Parse(source, "file.cs"), new[] { libRef }, assemblyName: "Source").VerifyDiagnostics(
+            var libRef = CreateCompilation(libSource, assemblyName: "Metadata").EmitToImageReference();
+            CreateCompilation(Parse(source, "file.cs"), new[] { libRef }, assemblyName: "Source").VerifyDiagnostics(
                 // file.cs(6,36): warning CS0436: The type 'C' in 'file.cs' conflicts with the imported type 'C' in 'Metadata, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null'. Using the type defined in 'file.cs'.
                 //         var c = args == null ? new C() : Lib.M();
                 Diagnostic(ErrorCode.WRN_SameFullNameThisAggAgg, "C").WithArguments("file.cs", "C", "Metadata, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null", "C").WithLocation(6, 36),
@@ -504,8 +504,8 @@ public class C
 }
 ";
 
-            var libRef = CreateCompilationWithMscorlib(libSource, assemblyName: "Metadata").EmitToImageReference();
-            CreateCompilationWithMscorlib(Parse(source, "file.cs"), new[] { libRef }, assemblyName: "Source").VerifyDiagnostics(
+            var libRef = CreateCompilation(libSource, assemblyName: "Metadata").EmitToImageReference();
+            CreateCompilation(Parse(source, "file.cs"), new[] { libRef }, assemblyName: "Source").VerifyDiagnostics(
                 // file.cs(7,16): warning CS0436: The type 'C' in 'file.cs' conflicts with the imported type 'C' in 'Metadata, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null'. Using the type defined in 'file.cs'.
                 //         D d = (C c) => { };
                 Diagnostic(ErrorCode.WRN_SameFullNameThisAggAgg, "C").WithArguments("file.cs", "C", "Metadata, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null", "C").WithLocation(7, 16),
@@ -539,8 +539,8 @@ public class C
 }
 ";
 
-            var libRef = CreateCompilationWithMscorlib(libSource, assemblyName: "Metadata").EmitToImageReference();
-            CreateCompilationWithMscorlib(Parse(source, "file.cs"), new[] { libRef }, assemblyName: "Source").VerifyDiagnostics(
+            var libRef = CreateCompilation(libSource, assemblyName: "Metadata").EmitToImageReference();
+            CreateCompilation(Parse(source, "file.cs"), new[] { libRef }, assemblyName: "Source").VerifyDiagnostics(
                 // file.cs(6,19): warning CS0436: The type 'C' in 'file.cs' conflicts with the imported type 'C' in 'Metadata, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null'. Using the type defined in 'file.cs'.
                 //         Lib.M(new C());
                 Diagnostic(ErrorCode.WRN_SameFullNameThisAggAgg, "C").WithArguments("file.cs", "C", "Metadata, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null", "C").WithLocation(6, 19),
@@ -572,8 +572,8 @@ public class C
 }
 ";
 
-            var libRef = new CSharpCompilationReference(CreateCompilationWithMscorlib(Parse(libSource, "file.cs"), assemblyName: "Metadata"));
-            CreateCompilationWithMscorlib(Parse(source, "file.cs"), new[] { libRef }, assemblyName: "Source").VerifyDiagnostics(
+            var libRef = new CSharpCompilationReference(CreateCompilation(Parse(libSource, "file.cs"), assemblyName: "Metadata"));
+            CreateCompilation(Parse(source, "file.cs"), new[] { libRef }, assemblyName: "Source").VerifyDiagnostics(
                 // file.cs(6,21): warning CS0436: The type 'C' in 'file.cs' conflicts with the imported type 'C' in 'Metadata, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null'. Using the type defined in 'file.cs'.
                 //         var c = new C();
                 Diagnostic(ErrorCode.WRN_SameFullNameThisAggAgg, "C").WithArguments("file.cs", "C", "Metadata, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null", "C").WithLocation(6, 21),
@@ -604,14 +604,14 @@ public class C
 }
 ";
 
-            var libRef = CreateCompilationWithMscorlib(libSource, assemblyName: "Metadata").EmitToImageReference();
-            CreateCompilationWithMscorlib(Parse(source, "file.cs"), new[] { libRef }, assemblyName: "Source").VerifyDiagnostics(
+            var libRef = CreateCompilation(libSource, assemblyName: "Metadata").EmitToImageReference();
+            CreateCompilation(Parse(source, "file.cs"), new[] { libRef }, assemblyName: "Source").VerifyDiagnostics(
                 // file.cs(6,15): warning CS0436: The type 'C' in 'file.cs' conflicts with the imported type 'C' in 'Metadata, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null'. Using the type defined in 'file.cs'.
                 //         Lib.M<C>();
                 Diagnostic(ErrorCode.WRN_SameFullNameThisAggAgg, "C").WithArguments("file.cs", "C", "Metadata, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null", "C").WithLocation(6, 15),
-                // file.cs(6,9): error CS0311: The type 'C [file.cs(2)]' cannot be used as type parameter 'T' in the generic type or method 'Lib.M<T>()'. There is no implicit reference conversion from 'C [file.cs(2)]' to 'C [Metadata, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null]'.
+                // file.cs(6,13): error CS0311: The type 'C [file.cs(2)]' cannot be used as type parameter 'T' in the generic type or method 'Lib.M<T>()'. There is no implicit reference conversion from 'C [file.cs(2)]' to 'C [Metadata, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null]'.
                 //         Lib.M<C>();
-                Diagnostic(ErrorCode.ERR_GenericConstraintNotSatisfiedRefType, "Lib.M<C>").WithArguments("Lib.M<T>()", "C [Metadata, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null]", "T", "C [file.cs(2)]").WithLocation(6, 9));
+                Diagnostic(ErrorCode.ERR_GenericConstraintNotSatisfiedRefType, "M<C>").WithArguments("Lib.M<T>()", "C [Metadata, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null]", "T", "C [file.cs(2)]").WithLocation(6, 13));
         }
 
         // Not relevant: will always have one nullable and one non-nullable.
@@ -641,11 +641,11 @@ public class Test<C> where C : struct
 }
 ";
 
-            var libRef = CreateCompilationWithMscorlib(libSource, assemblyName: "Metadata").EmitToImageReference();
-            CreateCompilationWithMscorlib(Parse(source, "file.cs"), new[] { libRef }, assemblyName: "Source").VerifyDiagnostics(
-                // file.cs(6,9): error CS0314: The type 'C [file.cs(2)]' cannot be used as type parameter 'T' in the generic type or method 'Lib.M<T>()'. There is no boxing conversion or type parameter conversion from 'C [file.cs(2)]' to 'C [Metadata, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null]'.
+            var libRef = CreateCompilation(libSource, assemblyName: "Metadata").EmitToImageReference();
+            CreateCompilation(Parse(source, "file.cs"), new[] { libRef }, assemblyName: "Source").VerifyDiagnostics(
+                // file.cs(6,13): error CS0314: The type 'C [file.cs(2)]' cannot be used as type parameter 'T' in the generic type or method 'Lib.M<T>()'. There is no boxing conversion or type parameter conversion from 'C [file.cs(2)]' to 'C [Metadata, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null]'.
                 //         Lib.M<C>();
-                Diagnostic(ErrorCode.ERR_GenericConstraintNotSatisfiedTyVar, "Lib.M<C>").WithArguments("Lib.M<T>()", "C [Metadata, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null]", "T", "C [file.cs(2)]").WithLocation(6, 9));
+                Diagnostic(ErrorCode.ERR_GenericConstraintNotSatisfiedTyVar, "M<C>").WithArguments("Lib.M<T>()", "C [Metadata, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null]", "T", "C [file.cs(2)]").WithLocation(6, 13));
         }
 
         [Fact]
@@ -672,14 +672,14 @@ public class Test
 }
 ";
 
-            var libRef = CreateCompilationWithMscorlib(libSource, assemblyName: "Metadata").EmitToImageReference();
-            CreateCompilationWithMscorlib(Parse(source, "file.cs"), new[] { libRef }, assemblyName: "Source").VerifyDiagnostics(
+            var libRef = CreateCompilation(libSource, assemblyName: "Metadata").EmitToImageReference();
+            CreateCompilation(Parse(source, "file.cs"), new[] { libRef }, assemblyName: "Source").VerifyDiagnostics(
                 // file.cs(8,15): warning CS0436: The type 'C' in 'file.cs' conflicts with the imported type 'C' in 'Metadata, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null'. Using the type defined in 'file.cs'.
                 //         Lib.M<C>();
                 Diagnostic(ErrorCode.WRN_SameFullNameThisAggAgg, "C").WithArguments("file.cs", "C", "Metadata, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null", "C").WithLocation(8, 15),
-                // file.cs(8,9): error CS0315: The type 'C [file.cs(2)]' cannot be used as type parameter 'T' in the generic type or method 'Lib.M<T>()'. There is no boxing conversion from 'C [file.cs(2)]' to 'C [Metadata, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null]'.
+                // file.cs(8,13): error CS0315: The type 'C [file.cs(2)]' cannot be used as type parameter 'T' in the generic type or method 'Lib.M<T>()'. There is no boxing conversion from 'C [file.cs(2)]' to 'C [Metadata, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null]'.
                 //         Lib.M<C>();
-                Diagnostic(ErrorCode.ERR_GenericConstraintNotSatisfiedValType, "Lib.M<C>").WithArguments("Lib.M<T>()", "C [Metadata, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null]", "T", "C [file.cs(2)]").WithLocation(8, 9));
+                Diagnostic(ErrorCode.ERR_GenericConstraintNotSatisfiedValType, "M<C>").WithArguments("Lib.M<T>()", "C [Metadata, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null]", "T", "C [file.cs(2)]").WithLocation(8, 13));
         }
 
         [WorkItem(6262, "https://github.com/dotnet/roslyn/issues/6262")]
@@ -690,7 +690,7 @@ public class Test
 @"class A { }
 class B { }
 class C { }";
-            var compilation = CreateCompilationWithMscorlib(source);
+            var compilation = CreateCompilation(source);
             var sA = compilation.GetMember<NamedTypeSymbol>("A");
             var sB = compilation.GetMember<NamedTypeSymbol>("B");
             var sC = compilation.GetMember<NamedTypeSymbol>("C");
@@ -702,6 +702,87 @@ class C { }";
         private static bool AreEqual(SymbolDistinguisher a, SymbolDistinguisher b)
         {
             return a.First.Equals(b.First) && a.Second.Equals(b.Second);
+        }
+
+        [WorkItem(8470, "https://github.com/dotnet/roslyn/issues/8470")]
+        [Fact]
+        public void DescriptionNoCompilation()
+        {
+            var source =
+@"class A { }
+class B { }";
+            var compilation = CreateCompilation(source);
+            var typeA = compilation.GetMember<NamedTypeSymbol>("A");
+            var typeB = compilation.GetMember<NamedTypeSymbol>("B");
+            var distinguisher1 = new SymbolDistinguisher(compilation, typeA, typeB);
+            var distinguisher2 = new SymbolDistinguisher(null, typeA, typeB);
+            var arg1A = distinguisher1.First;
+            var arg2A = distinguisher2.First;
+            Assert.False(arg1A.Equals(arg2A));
+            Assert.False(arg2A.Equals(arg1A));
+            int hashCode1A = arg1A.GetHashCode();
+            int hashCode2A = arg2A.GetHashCode();
+        }
+
+        [WorkItem(8470, "https://github.com/dotnet/roslyn/issues/8470")]
+        [Fact]
+        public void CompareDiagnosticsNoCompilation()
+        {
+            var source1 =
+@"public class A { }
+public class B<T> where T : A { }";
+            var compilation1 = CreateCompilation(source1);
+            compilation1.VerifyDiagnostics();
+            var ref1 = compilation1.EmitToImageReference();
+            var source2 =
+@"class C : B<object> { }";
+            var compilation2 = CreateCompilation(source2, references: new[] { ref1 });
+            var diagnostics = compilation2.GetDiagnostics();
+            diagnostics.Verify(
+                // (1,7): error CS0311: The type 'object' cannot be used as type parameter 'T' in the generic type or method 'B<T>'. There is no implicit reference conversion from 'object' to 'A'.
+                // class C : B<object> { }
+                Diagnostic(ErrorCode.ERR_GenericConstraintNotSatisfiedRefType, "C").WithArguments("B<T>", "A", "T", "object").WithLocation(1, 7));
+            // Command-line compiler calls SymbolDistinguisher.Description.GetHashCode()
+            // when adding diagnostics to a set.
+            foreach (var diagnostic in diagnostics)
+            {
+                diagnostic.GetHashCode();
+            }
+        }
+
+        [WorkItem(8588, "https://github.com/dotnet/roslyn/issues/8588")]
+        [Fact]
+        public void SameErrorTypeArgumentsDifferentSourceAssemblies()
+        {
+            var source0 =
+@"public class A
+{
+    public static void M(System.Collections.Generic.IEnumerable<E> e)
+    {
+    }
+}";
+            var source1 =
+@"class B
+{
+    static void M(System.Collections.Generic.IEnumerable<E> e)
+    {
+        A.M(e);
+    }
+}";
+            var comp0 = CreateCompilation(source0);
+            comp0.VerifyDiagnostics(
+                // (3,65): error CS0246: The type or namespace name 'E' could not be found (are you missing a using directive or an assembly reference?)
+                //     public static void M(System.Collections.Generic.IEnumerable<E> e)
+                Diagnostic(ErrorCode.ERR_SingleTypeNameNotFound, "E").WithArguments("E").WithLocation(3, 65));
+            var ref0 = new CSharpCompilationReference(comp0);
+            var comp1 = CreateCompilation(Parse(source1), new[] { ref0 });
+            comp1.VerifyDiagnostics(
+                // (3,58): error CS0246: The type or namespace name 'E' could not be found (are you missing a using directive or an assembly reference?)
+                //     static void M(System.Collections.Generic.IEnumerable<E> e)
+                Diagnostic(ErrorCode.ERR_SingleTypeNameNotFound, "E").WithArguments("E").WithLocation(3, 58),
+                // (5,13): error CS1503: Argument 1: cannot convert from 'System.Collections.Generic.IEnumerable<E>' to 'System.Collections.Generic.IEnumerable<E>'
+                //         A.M(e);
+                Diagnostic(ErrorCode.ERR_BadArgType, "e").WithArguments("1", "System.Collections.Generic.IEnumerable<E>", "System.Collections.Generic.IEnumerable<E>").WithLocation(5, 13));
         }
     }
 }

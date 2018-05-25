@@ -3,7 +3,7 @@
 using System;
 using System.Collections.Immutable;
 using System.Threading;
-using Microsoft.CodeAnalysis.Semantics;
+using Microsoft.CodeAnalysis.Operations;
 using Microsoft.CodeAnalysis.Text;
 
 namespace Microsoft.CodeAnalysis.Diagnostics
@@ -64,7 +64,7 @@ namespace Microsoft.CodeAnalysis.Diagnostics
         public abstract void RegisterSemanticModelAction(Action<SemanticModelAnalysisContext> action);
 
         /// <summary>
-        /// Register an action to be executed at completion of semantic analysis of an <see cref="ISymbol"/> with an appropriate Kind.>
+        /// Register an action to be executed at completion of semantic analysis of an <see cref="ISymbol"/> with an appropriate Kind.
         /// A symbol action reports <see cref="Diagnostic"/>s about <see cref="ISymbol"/>s.
         /// </summary>
         /// <param name="action">Action to be executed for an <see cref="ISymbol"/>.</param>
@@ -75,7 +75,7 @@ namespace Microsoft.CodeAnalysis.Diagnostics
         }
 
         /// <summary>
-        /// Register an action to be executed at completion of semantic analysis of an <see cref="ISymbol"/> with an appropriate Kind.>
+        /// Register an action to be executed at completion of semantic analysis of an <see cref="ISymbol"/> with an appropriate Kind.
         /// A symbol action reports <see cref="Diagnostic"/>s about <see cref="ISymbol"/>s.
         /// </summary>
         /// <param name="action">Action to be executed for an <see cref="ISymbol"/>.</param>
@@ -190,8 +190,8 @@ namespace Microsoft.CodeAnalysis.Diagnostics
 
         /// <summary>
         /// Configure analysis mode of generated code for this analyzer.
-        /// Non-configured analyzers will default to <see cref="GeneratedCodeAnalysisFlags.Default"/> mode for generated code.
-        /// It is recommended for the analyzer to always invoke this API with the required <see cref="GeneratedCodeAnalysisFlags"/> setting.
+        /// Non-configured analyzers will default to an appropriate default mode for generated code.
+        /// It is recommended for the analyzer to invoke this API with the required <see cref="GeneratedCodeAnalysisFlags"/> setting.
         /// </summary>
         public virtual void ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags analysisMode)
         {
@@ -229,27 +229,22 @@ namespace Microsoft.CodeAnalysis.Diagnostics
     {
         /// <summary>
         /// Disable analyzer action callbacks and diagnostic reporting for generated code.
+        /// Analyzer driver will not make callbacks into the analyzer for entities (source files, symbols, etc.) that it classifies as generated code.
+        /// Additionally, any diagnostic reported by the analyzer with location in generated code will not be reported.
         /// </summary>
         None = 0x00,
 
         /// <summary>
         /// Enable analyzer action callbacks for generated code.
+        /// Analyzer driver will make callbacks into the analyzer for all entities (source files, symbols, etc.) in the compilation, including generated code.
         /// </summary>
         Analyze = 0x01,
 
         /// <summary>
         /// Enable reporting diagnostics on generated code.
+        /// Analyzer driver will not suppress any analyzer diagnostic based on whether or not it's location is in generated code.
         /// </summary>
-        ReportDiagnostics = 0x10,
-
-        /// <summary>
-        /// Default analysis mode for generated code.
-        /// </summary>
-        /// <remarks>
-        /// This mode will always guarantee that analyzer action callbacks are enabled for generated code, i.e. <see cref="Analyze"/> will be set.
-        /// However, the default diagnostic reporting mode is liable to change in future.
-        /// </remarks>
-        Default = Analyze | ReportDiagnostics,
+        ReportDiagnostics = 0x02,
     }
 
     /// <summary>
@@ -323,7 +318,7 @@ namespace Microsoft.CodeAnalysis.Diagnostics
         public abstract void RegisterSemanticModelAction(Action<SemanticModelAnalysisContext> action);
 
         /// <summary>
-        /// Register an action to be executed at completion of semantic analysis of an <see cref="ISymbol"/> with an appropriate Kind.>
+        /// Register an action to be executed at completion of semantic analysis of an <see cref="ISymbol"/> with an appropriate Kind.
         /// A symbol action reports <see cref="Diagnostic"/>s about <see cref="ISymbol"/>s.
         /// </summary>
         /// <param name="action">Action to be executed for an <see cref="ISymbol"/>.</param>
@@ -334,7 +329,7 @@ namespace Microsoft.CodeAnalysis.Diagnostics
         }
 
         /// <summary>
-        /// Register an action to be executed at completion of semantic analysis of an <see cref="ISymbol"/> with an appropriate Kind.>
+        /// Register an action to be executed at completion of semantic analysis of an <see cref="ISymbol"/> with an appropriate Kind.
         /// A symbol action reports <see cref="Diagnostic"/>s about <see cref="ISymbol"/>s.
         /// </summary>
         /// <param name="action">Action to be executed for an <see cref="ISymbol"/>.</param>
@@ -666,6 +661,8 @@ namespace Microsoft.CodeAnalysis.Diagnostics
         /// </summary>
         public CancellationToken CancellationToken { get { return _cancellationToken; } }
 
+        internal Func<Diagnostic, bool> IsSupportedDiagnostic => _isSupportedDiagnostic;
+
         public SymbolAnalysisContext(ISymbol symbol, Compilation compilation, AnalyzerOptions options, Action<Diagnostic> reportDiagnostic, Func<Diagnostic, bool> isSupportedDiagnostic, CancellationToken cancellationToken)
         {
             _symbol = symbol;
@@ -855,18 +852,27 @@ namespace Microsoft.CodeAnalysis.Diagnostics
     {
         private readonly ImmutableArray<IOperation> _operationBlocks;
         private readonly ISymbol _owningSymbol;
+        private readonly Compilation _compilation;
         private readonly AnalyzerOptions _options;
         private readonly CancellationToken _cancellationToken;
 
         /// <summary>
-        /// Method body and/or expressions subject to analysis.
+        /// One or more operation blocks that are the subject of the analysis.
+        /// This includes all blocks associated with the <see cref="OwningSymbol"/>,
+        /// such as method body, field/property/constructor/parameter initializer(s), attributes, etc.
         /// </summary>
+        /// <remarks>Note that the operation blocks are not in any specific order.</remarks>
         public ImmutableArray<IOperation> OperationBlocks => _operationBlocks;
 
         /// <summary>
-        /// <see cref="ISymbol"/> for which the code block provides a definition or value.
+        /// <see cref="ISymbol"/> for which the <see cref="OperationBlocks"/> provides a definition or value.
         /// </summary>
         public ISymbol OwningSymbol => _owningSymbol;
+
+        /// <summary>
+        /// <see cref="CodeAnalysis.Compilation"/> containing the <see cref="OperationBlocks"/>.
+        /// </summary>
+        public Compilation Compilation => _compilation;
 
         /// <summary>
         /// Options specified for the analysis.
@@ -878,10 +884,11 @@ namespace Microsoft.CodeAnalysis.Diagnostics
         /// </summary>
         public CancellationToken CancellationToken => _cancellationToken;
 
-        protected OperationBlockStartAnalysisContext(ImmutableArray<IOperation> operationBlocks, ISymbol owningSymbol, AnalyzerOptions options, CancellationToken cancellationToken)
+        protected OperationBlockStartAnalysisContext(ImmutableArray<IOperation> operationBlocks, ISymbol owningSymbol, Compilation compilation, AnalyzerOptions options, CancellationToken cancellationToken)
         {
             _operationBlocks = operationBlocks;
             _owningSymbol = owningSymbol;
+            _compilation = compilation;
             _options = options;
             _cancellationToken = cancellationToken;
         }
@@ -923,21 +930,29 @@ namespace Microsoft.CodeAnalysis.Diagnostics
     {
         private readonly ImmutableArray<IOperation> _operationBlocks;
         private readonly ISymbol _owningSymbol;
-        private readonly SemanticModel _semanticModelOpt;
+        private readonly Compilation _compilation;
         private readonly AnalyzerOptions _options;
         private readonly Action<Diagnostic> _reportDiagnostic;
         private readonly Func<Diagnostic, bool> _isSupportedDiagnostic;
         private readonly CancellationToken _cancellationToken;
 
         /// <summary>
-        /// Code block that is the subject of the analysis.
+        /// One or more operation blocks that are the subject of the analysis.
+        /// This includes all blocks associated with the <see cref="OwningSymbol"/>,
+        /// such as method body, field/property/constructor/parameter initializer(s), attributes, etc.
         /// </summary>
+        /// <remarks>Note that the operation blocks are not in any specific order.</remarks>
         public ImmutableArray<IOperation> OperationBlocks => _operationBlocks;
 
         /// <summary>
-        /// <see cref="ISymbol"/> for which the code block provides a definition or value.
+        /// <see cref="ISymbol"/> for which the <see cref="OperationBlocks"/> provides a definition or value.
         /// </summary>
         public ISymbol OwningSymbol => _owningSymbol;
+
+        /// <summary>
+        /// <see cref="CodeAnalysis.Compilation"/> containing the <see cref="OperationBlocks"/>.
+        /// </summary>
+        public Compilation Compilation => _compilation;
 
         /// <summary>
         /// Options specified for the analysis.
@@ -949,18 +964,11 @@ namespace Microsoft.CodeAnalysis.Diagnostics
         /// </summary>
         public CancellationToken CancellationToken => _cancellationToken;
 
-        internal Compilation Compilation => _semanticModelOpt?.Compilation;
-
-        public OperationBlockAnalysisContext(ImmutableArray<IOperation> operationBlocks, ISymbol owningSymbol, AnalyzerOptions options, Action<Diagnostic> reportDiagnostic, Func<Diagnostic, bool> isSupportedDiagnostic, CancellationToken cancellationToken)
-            : this(operationBlocks, owningSymbol, options, reportDiagnostic, isSupportedDiagnostic, semanticModel: null, cancellationToken: cancellationToken)
-        {
-        }
-
-        internal OperationBlockAnalysisContext(ImmutableArray<IOperation> operationBlocks, ISymbol owningSymbol, AnalyzerOptions options, Action<Diagnostic> reportDiagnostic, Func<Diagnostic, bool> isSupportedDiagnostic, SemanticModel semanticModel, CancellationToken cancellationToken)
+        public OperationBlockAnalysisContext(ImmutableArray<IOperation> operationBlocks, ISymbol owningSymbol, Compilation compilation, AnalyzerOptions options, Action<Diagnostic> reportDiagnostic, Func<Diagnostic, bool> isSupportedDiagnostic, CancellationToken cancellationToken)
         {
             _operationBlocks = operationBlocks;
             _owningSymbol = owningSymbol;
-            _semanticModelOpt = semanticModel;
+            _compilation = compilation;
             _options = options;
             _reportDiagnostic = reportDiagnostic;
             _isSupportedDiagnostic = isSupportedDiagnostic;
@@ -973,7 +981,7 @@ namespace Microsoft.CodeAnalysis.Diagnostics
         /// <param name="diagnostic"><see cref="Diagnostic"/> to be reported.</param>
         public void ReportDiagnostic(Diagnostic diagnostic)
         {
-            DiagnosticAnalysisContextHelpers.VerifyArguments(diagnostic, _semanticModelOpt?.Compilation, _isSupportedDiagnostic);
+            DiagnosticAnalysisContextHelpers.VerifyArguments(diagnostic, Compilation, _isSupportedDiagnostic);
             lock (_reportDiagnostic)
             {
                 _reportDiagnostic(diagnostic);

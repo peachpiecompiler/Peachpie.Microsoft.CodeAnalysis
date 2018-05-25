@@ -1,16 +1,19 @@
 ﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
-using Roslyn.Test.Utilities;
-using Xunit;
-using Microsoft.CodeAnalysis.Editor.UnitTests.Workspaces;
-using Microsoft.CodeAnalysis.Editor.Host;
 using System.Collections.Generic;
-using System;
 using System.Collections.Immutable;
 using System.Linq;
+using Microsoft.CodeAnalysis.Editor.Host;
+using Microsoft.CodeAnalysis.Editor.UnitTests.Workspaces;
+using Microsoft.CodeAnalysis.Test.Utilities;
+using Microsoft.VisualStudio.Text.Editor;
+using Microsoft.VisualStudio.Text.Editor.OptionsExtensionMethods;
+using Roslyn.Test.Utilities;
+using Xunit;
 
 namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.Interactive.Commands
 {
+    [UseExportProvider]
     public class ResetInteractiveTests
     {
         private string WorkspaceXmlStr =>
@@ -20,15 +23,21 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.Interactive.Commands
     </Project>
     <Project Language=""C#"" AssemblyName=""ResetInteractiveTestsAssembly"" CommonReferences=""true"">
         <ProjectReference>ResetInteractiveVisualBasicSubproject</ProjectReference>
-        <Document FilePath=""ResetInteractiveTestsDocument""></Document>
+        <Document FilePath=""ResetInteractiveTestsDocument"">
+namespace ResetInteractiveTestsDocument
+{
+    class TestClass
+    {
+    }
+}</Document>
     </Project>
 </Workspace>";
 
         [WpfFact]
         [Trait(Traits.Feature, Traits.Features.Interactive)]
-        public async void TestResetREPLWithProjectContext()
+        public void TestResetREPLWithProjectContext()
         {
-            using (var workspace = await TestWorkspace.CreateAsync(WorkspaceXmlStr))
+            using (var workspace = TestWorkspace.Create(WorkspaceXmlStr, exportProvider: InteractiveWindowTestHost.ExportProviderFactory.CreateExportProvider()))
             {
                 var project = workspace.CurrentSolution.Projects.FirstOrDefault(p => p.AssemblyName == "ResetInteractiveTestsAssembly");
                 var document = project.Documents.FirstOrDefault(d => d.FilePath == "ResetInteractiveTestsDocument");
@@ -37,13 +46,12 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.Interactive.Commands
                 Assert.True(replReferenceCommands.Any(rc => rc.EndsWith(@"ResetInteractiveTestsAssembly.dll""")));
                 Assert.True(replReferenceCommands.Any(rc => rc.EndsWith(@"ResetInteractiveVisualBasicSubproject.dll""")));
 
-                var expectedSubmissions = new List<string> {
-                    string.Join("\r\n", replReferenceCommands) + "\r\n",
-                    string.Join("\r\n", @"using ""ns1"";", @"using ""ns2"";") + "\r\n"};
-                AssertResetInteractive(workspace, project, buildSucceeds: true, expectedSubmissions: expectedSubmissions);
+                var expectedReferences = replReferenceCommands.ToList();
+                var expectedUsings = new List<string> { @"using ""System"";", @"using ""ResetInteractiveTestsDocument"";" };
+                AssertResetInteractive(workspace, project, buildSucceeds: true, expectedReferences: expectedReferences, expectedUsings: expectedUsings);
 
                 // Test that no submissions are executed if the build fails.
-                AssertResetInteractive(workspace, project, buildSucceeds: false, expectedSubmissions: new List<string>());
+                AssertResetInteractive(workspace, project, buildSucceeds: false, expectedReferences: new List<string>());
             }
         }
 
@@ -51,18 +59,26 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.Interactive.Commands
             TestWorkspace workspace,
             Project project,
             bool buildSucceeds,
-            List<string> expectedSubmissions)
+            List<string> expectedReferences = null,
+            List<string> expectedUsings = null)
         {
-            InteractiveWindowTestHost testHost = new InteractiveWindowTestHost();
+            expectedReferences = expectedReferences ?? new List<string>();
+            expectedUsings = expectedUsings ?? new List<string>();
+
+            InteractiveWindowTestHost testHost = new InteractiveWindowTestHost(workspace.ExportProvider);
             List<string> executedSubmissionCalls = new List<string>();
-            EventHandler<string> ExecuteSubmission = (_, code) => { executedSubmissionCalls.Add(code); };
+            void ExecuteSubmission(object _, string code) { executedSubmissionCalls.Add(code); }
 
             testHost.Evaluator.OnExecute += ExecuteSubmission;
 
             IWaitIndicator waitIndicator = workspace.GetService<IWaitIndicator>();
+            IEditorOptionsFactoryService editorOptionsFactoryService = workspace.GetService<IEditorOptionsFactoryService>();
+            var editorOptions = editorOptionsFactoryService.GetOptions(testHost.Window.CurrentLanguageBuffer);
+            var newLineCharacter = editorOptions.GetNewLineCharacter();
 
             TestResetInteractive resetInteractive = new TestResetInteractive(
                 waitIndicator,
+                editorOptionsFactoryService,
                 CreateReplReferenceCommand,
                 CreateImport,
                 buildSucceeds: buildSucceeds)
@@ -70,7 +86,8 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.Interactive.Commands
                 References = ImmutableArray.CreateRange(GetProjectReferences(workspace, project)),
                 ReferenceSearchPaths = ImmutableArray.Create("rsp1", "rsp2"),
                 SourceSearchPaths = ImmutableArray.Create("ssp1", "ssp2"),
-                NamespacesToImport = ImmutableArray.Create("ns1", "ns2"),
+                ProjectNamespaces = ImmutableArray.Create("System", "ResetInteractiveTestsDocument", "VisualBasicResetInteractiveTestsDocument"),
+                NamespacesToImport = ImmutableArray.Create("System", "ResetInteractiveTestsDocument"),
                 ProjectDirectory = "pj",
             };
 
@@ -79,6 +96,16 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.Interactive.Commands
             // Validate that the project was rebuilt.
             Assert.Equal(1, resetInteractive.BuildProjectCount);
             Assert.Equal(0, resetInteractive.CancelBuildProjectCount);
+
+            var expectedSubmissions = new List<string>();
+            if (expectedReferences.Any())
+            {
+                expectedSubmissions.AddRange(expectedReferences.Select(r => r + newLineCharacter));
+            }
+            if (expectedUsings.Any())
+            {
+                expectedSubmissions.Add(string.Join(newLineCharacter, expectedUsings) + newLineCharacter);
+            }
 
             AssertEx.Equal(expectedSubmissions, executedSubmissionCalls);
 

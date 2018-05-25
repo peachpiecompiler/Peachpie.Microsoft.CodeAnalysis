@@ -42,7 +42,7 @@ namespace Microsoft.CodeAnalysis.CSharp.UnitTests
                 Diagnostic(ErrorCode.WRN_XMLParseError, "").WithArguments("unclosed"));
         }
 
-        [ClrOnlyFact(ClrOnlyReason.DocumentationComment)]
+        [ClrOnlyFact(ClrOnlyReason.DocumentationComment, Skip = "https://github.com/dotnet/roslyn/issues/8807")]
         public void XmlSyntaxError_Included()
         {
             var xml = @"<unclosed>";
@@ -347,7 +347,7 @@ partial class Partial {{ }}
             var trees = AllModes.Select(mode =>
                 Parse(string.Format(sourceTemplate, xml, mode), string.Format("{0}.cs", mode), GetOptions(mode)));
 
-            var comp = CreateCompilationWithMscorlib(trees, assemblyName: "Test");
+            var comp = CreateCompilation(trees.ToArray(), assemblyName: "Test");
             comp.VerifyDiagnostics(expectedDiagnostics);
 
             var actualText = GetDocumentationCommentText(comp, expectedDiagnostics: null);
@@ -376,15 +376,15 @@ partial class Partial {{ }}
             var trees = AllModes.Select(mode =>
                 Parse(string.Format(sourceTemplate, includeElement, mode), string.Format("{0}.cs", mode), GetOptions(mode)));
 
-            var comp = CreateCompilationWithMscorlib(
-                trees,
+            var comp = CreateCompilation(
+                trees.ToArray(),
                 options: TestOptions.ReleaseDll.WithXmlReferenceResolver(XmlFileResolver.Default),
                 assemblyName: "Test");
 
             comp.GetDiagnostics().Verify(fallbackToErrorCodeOnlyForNonEnglish: fallbackToErrorCodeOnlyForNonEnglish, expected: makeExpectedDiagnostics(includeElement));
 
             var actualText = GetDocumentationCommentText(comp, expectedDiagnostics: null);
-            var expectedText = string.Format(expectedTextTemplate, xmlFilePath);
+            var expectedText = string.Format(expectedTextTemplate, TestHelpers.AsXmlCommentText(xmlFilePath));
             Assert.Equal(expectedText, actualText);
         }
 

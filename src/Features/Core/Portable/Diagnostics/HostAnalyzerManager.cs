@@ -5,12 +5,9 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
-using System.Reflection;
+using System.Runtime.CompilerServices;
 using Microsoft.CodeAnalysis.Diagnostics.Log;
 using Roslyn.Utilities;
-using System.Runtime.CompilerServices;
-using System.Reflection.Metadata;
-using System.Reflection.PortableExecutable;
 
 namespace Microsoft.CodeAnalysis.Diagnostics
 {
@@ -35,7 +32,7 @@ namespace Microsoft.CodeAnalysis.Diagnostics
         /// 
         /// We use the key to de-duplicate analyzer references if they are referenced from multiple places.
         /// </summary>
-        private readonly ImmutableDictionary<object, AnalyzerReference> _hostAnalyzerReferencesMap;
+        private readonly Lazy<ImmutableDictionary<object, AnalyzerReference>> _hostAnalyzerReferencesMap;
 
         /// <summary>
         /// Key is the language the <see cref="DiagnosticAnalyzer"/> supports and key for the second map is analyzer reference identity and
@@ -79,8 +76,8 @@ namespace Microsoft.CodeAnalysis.Diagnostics
         /// </summary>
         private readonly ConditionalWeakTable<DiagnosticAnalyzer, IReadOnlyCollection<DiagnosticDescriptor>> _descriptorCache;
 
-        public HostAnalyzerManager(IEnumerable<HostDiagnosticAnalyzerPackage> hostAnalyzerPackages, IAnalyzerAssemblyLoader hostAnalyzerAssemblyLoader, AbstractHostDiagnosticUpdateSource hostDiagnosticUpdateSource) :
-            this(CreateAnalyzerReferencesFromPackages(hostAnalyzerPackages, new HostAnalyzerReferenceDiagnosticReporter(hostDiagnosticUpdateSource), hostAnalyzerAssemblyLoader),
+        public HostAnalyzerManager(IEnumerable<HostDiagnosticAnalyzerPackage> hostAnalyzerPackages, IAnalyzerAssemblyLoader hostAnalyzerAssemblyLoader, AbstractHostDiagnosticUpdateSource hostDiagnosticUpdateSource, PrimaryWorkspace primaryWorkspace) :
+            this(CreateAnalyzerReferencesFromPackages(hostAnalyzerPackages, new HostAnalyzerReferenceDiagnosticReporter(hostDiagnosticUpdateSource, primaryWorkspace), hostAnalyzerAssemblyLoader),
                  hostAnalyzerPackages.ToImmutableArrayOrEmpty(), hostDiagnosticUpdateSource)
         {
         }
@@ -96,9 +93,9 @@ namespace Microsoft.CodeAnalysis.Diagnostics
             _hostDiagnosticAnalyzerPackages = hostAnalyzerPackages;
             _hostDiagnosticUpdateSource = hostDiagnosticUpdateSource;
 
-            _hostAnalyzerReferencesMap = hostAnalyzerReferences.IsDefault ? ImmutableDictionary<object, AnalyzerReference>.Empty : CreateAnalyzerReferencesMap(hostAnalyzerReferences);
+            _hostAnalyzerReferencesMap = new Lazy<ImmutableDictionary<object, AnalyzerReference>>(() => hostAnalyzerReferences.IsDefault ? ImmutableDictionary<object, AnalyzerReference>.Empty : CreateAnalyzerReferencesMap(hostAnalyzerReferences));
             _hostDiagnosticAnalyzersPerLanguageMap = new ConcurrentDictionary<string, ImmutableDictionary<object, ImmutableArray<DiagnosticAnalyzer>>>(concurrencyLevel: 2, capacity: 2);
-            _lazyHostDiagnosticAnalyzersPerReferenceMap = new Lazy<ImmutableDictionary<object, ImmutableArray<DiagnosticAnalyzer>>>(() => CreateDiagnosticAnalyzersPerReferenceMap(_hostAnalyzerReferencesMap), isThreadSafe: true);
+            _lazyHostDiagnosticAnalyzersPerReferenceMap = new Lazy<ImmutableDictionary<object, ImmutableArray<DiagnosticAnalyzer>>>(() => CreateDiagnosticAnalyzersPerReferenceMap(_hostAnalyzerReferencesMap.Value), isThreadSafe: true);
 
             _compilerDiagnosticAnalyzerMap = ImmutableDictionary<string, DiagnosticAnalyzer>.Empty;
             _compilerDiagnosticAnalyzerDescriptorMap = ImmutableDictionary<DiagnosticAnalyzer, HashSet<string>>.Empty;
@@ -123,10 +120,10 @@ namespace Microsoft.CodeAnalysis.Diagnostics
         {
             if (projectOpt == null)
             {
-                return _hostAnalyzerReferencesMap;
+                return _hostAnalyzerReferencesMap.Value;
             }
 
-            return _hostAnalyzerReferencesMap.AddRange(CreateProjectAnalyzerReferencesMap(projectOpt));
+            return _hostAnalyzerReferencesMap.Value.AddRange(CreateProjectAnalyzerReferencesMap(projectOpt));
         }
 
         /// <summary>
@@ -164,14 +161,17 @@ namespace Microsoft.CodeAnalysis.Diagnostics
         public bool IsAnalyzerSuppressed(DiagnosticAnalyzer analyzer, Project project)
         {
             var options = project.CompilationOptions;
-            if (options == null || analyzer.IsCompilerAnalyzer())
+            if (options == null || IsCompilerDiagnosticAnalyzer(project.Language, analyzer))
             {
                 return false;
             }
 
+            // don't capture project
+            var projectId = project.Id;
+
             // Skip telemetry logging for supported diagnostics, as that can cause an infinite loop.
-            Action<Exception, DiagnosticAnalyzer, Diagnostic> onAnalyzerException = (ex, a, diagnostic) =>
-                    AnalyzerHelper.OnAnalyzerException_NoTelemetryLogging(ex, a, diagnostic, _hostDiagnosticUpdateSource, project.Id);
+            void onAnalyzerException(Exception ex, DiagnosticAnalyzer a, Diagnostic diagnostic) =>
+                    AnalyzerHelper.OnAnalyzerException_NoTelemetryLogging(ex, a, diagnostic, _hostDiagnosticUpdateSource, projectId);
 
             return CompilationWithAnalyzers.IsDiagnosticAnalyzerSuppressed(analyzer, options, onAnalyzerException);
         }
@@ -222,25 +222,13 @@ namespace Microsoft.CodeAnalysis.Diagnostics
         }
 
         /// <summary>
-        /// Create <see cref="DiagnosticAnalyzer"/>s collection for given <paramref name="project"/>
-        /// </summary>
-        public ImmutableArray<DiagnosticAnalyzer> CreateDiagnosticAnalyzers(Project project)
-        {
-            var analyzersPerReferences = CreateDiagnosticAnalyzersPerReference(project);
-            return analyzersPerReferences.SelectMany(kv => kv.Value).ToImmutableArray();
-        }
-
-        /// <summary>
         /// Check whether given <see cref="DiagnosticData"/> belong to compiler diagnostic analyzer
         /// </summary>
         public bool IsCompilerDiagnostic(string language, DiagnosticData diagnostic)
         {
             var map = GetHostDiagnosticAnalyzersPerReference(language);
-
-            HashSet<string> idMap;
-            DiagnosticAnalyzer compilerAnalyzer;
-            if (_compilerDiagnosticAnalyzerMap.TryGetValue(language, out compilerAnalyzer) &&
-                _compilerDiagnosticAnalyzerDescriptorMap.TryGetValue(compilerAnalyzer, out idMap) &&
+            if (_compilerDiagnosticAnalyzerMap.TryGetValue(language, out var compilerAnalyzer) &&
+                _compilerDiagnosticAnalyzerDescriptorMap.TryGetValue(compilerAnalyzer, out var idMap) &&
                 idMap.Contains(diagnostic.Id))
             {
                 return true;
@@ -255,9 +243,7 @@ namespace Microsoft.CodeAnalysis.Diagnostics
         public DiagnosticAnalyzer GetCompilerDiagnosticAnalyzer(string language)
         {
             var map = GetHostDiagnosticAnalyzersPerReference(language);
-
-            DiagnosticAnalyzer compilerAnalyzer;
-            if (_compilerDiagnosticAnalyzerMap.TryGetValue(language, out compilerAnalyzer))
+            if (_compilerDiagnosticAnalyzerMap.TryGetValue(language, out var compilerAnalyzer))
             {
                 return compilerAnalyzer;
             }
@@ -271,9 +257,7 @@ namespace Microsoft.CodeAnalysis.Diagnostics
         public bool IsCompilerDiagnosticAnalyzer(string language, DiagnosticAnalyzer analyzer)
         {
             var map = GetHostDiagnosticAnalyzersPerReference(language);
-
-            DiagnosticAnalyzer compilerAnalyzer;
-            return _compilerDiagnosticAnalyzerMap.TryGetValue(language, out compilerAnalyzer) && compilerAnalyzer == analyzer;
+            return _compilerDiagnosticAnalyzerMap.TryGetValue(language, out var compilerAnalyzer) && compilerAnalyzer == analyzer;
         }
 
         /// <summary>
@@ -282,9 +266,7 @@ namespace Microsoft.CodeAnalysis.Diagnostics
         public string GetDiagnosticAnalyzerPackageName(string language, DiagnosticAnalyzer analyzer)
         {
             var map = GetHostDiagnosticAnalyzersPerReference(language);
-
-            string name;
-            if (_hostDiagnosticAnalyzerPackageNameMap.TryGetValue(analyzer, out name))
+            if (_hostDiagnosticAnalyzerPackageNameMap.TryGetValue(analyzer, out var name))
             {
                 return name;
             }
@@ -328,7 +310,7 @@ namespace Microsoft.CodeAnalysis.Diagnostics
             var nameMap = CreateAnalyzerPathToPackageNameMap();
 
             var builder = ImmutableDictionary.CreateBuilder<object, ImmutableArray<DiagnosticAnalyzer>>();
-            foreach (var kv in _hostAnalyzerReferencesMap)
+            foreach (var kv in _hostAnalyzerReferencesMap.Value)
             {
                 var referenceIdentity = kv.Key;
                 var reference = kv.Value;
@@ -361,15 +343,14 @@ namespace Microsoft.CodeAnalysis.Diagnostics
                 return;
             }
 
-            string name;
-            if (!nameMap.TryGetValue(fileReference.FullPath, out name))
+            if (!nameMap.TryGetValue(fileReference.FullPath, out var name))
             {
                 return;
             }
 
             foreach (var analyzer in analyzers)
             {
-                ImmutableInterlocked.GetOrAdd(ref _hostDiagnosticAnalyzerPackageNameMap, analyzer, _ => name);
+                ImmutableInterlocked.GetOrAdd(ref _hostDiagnosticAnalyzerPackageNameMap, analyzer, name);
             }
         }
 
@@ -407,7 +388,7 @@ namespace Microsoft.CodeAnalysis.Diagnostics
                 if (analyzer.IsCompilerAnalyzer())
                 {
                     ImmutableInterlocked.GetOrAdd(ref _compilerDiagnosticAnalyzerDescriptorMap, analyzer, a => new HashSet<string>(GetDiagnosticDescriptors(a).Select(d => d.Id)));
-                    ImmutableInterlocked.GetOrAdd(ref _compilerDiagnosticAnalyzerMap, language, _ => analyzer);
+                    ImmutableInterlocked.GetOrAdd(ref _compilerDiagnosticAnalyzerMap, language, analyzer);
                     return;
                 }
             }
@@ -420,7 +401,7 @@ namespace Microsoft.CodeAnalysis.Diagnostics
                 return false;
             }
 
-            return !_hostAnalyzerReferencesMap.ContainsKey(reference.Id);
+            return !_hostAnalyzerReferencesMap.Value.ContainsKey(reference.Id);
         }
 
         private static ImmutableDictionary<object, ImmutableArray<DiagnosticAnalyzer>> CreateDiagnosticAnalyzersPerReferenceMap(
@@ -513,10 +494,12 @@ namespace Microsoft.CodeAnalysis.Diagnostics
         private class HostAnalyzerReferenceDiagnosticReporter
         {
             private readonly AbstractHostDiagnosticUpdateSource _hostUpdateSource;
+            private readonly PrimaryWorkspace _primaryWorkspace;
 
-            public HostAnalyzerReferenceDiagnosticReporter(AbstractHostDiagnosticUpdateSource hostUpdateSource)
+            public HostAnalyzerReferenceDiagnosticReporter(AbstractHostDiagnosticUpdateSource hostUpdateSource, PrimaryWorkspace primaryWorkspace)
             {
                 _hostUpdateSource = hostUpdateSource;
+                _primaryWorkspace = primaryWorkspace;
             }
 
             public void OnAnalyzerLoadFailed(object sender, AnalyzerLoadFailureEventArgs e)
@@ -532,13 +515,14 @@ namespace Microsoft.CodeAnalysis.Diagnostics
                 // diagnostic from host analyzer can never go away
                 var args = DiagnosticsUpdatedArgs.DiagnosticsCreated(
                     id: Tuple.Create(this, reference.FullPath, e.ErrorCode, e.TypeName),
-                    workspace: PrimaryWorkspace.Workspace,
+                    workspace: _primaryWorkspace.Workspace,
                     solution: null,
                     projectId: null,
                     documentId: null,
                     diagnostics: ImmutableArray.Create<DiagnosticData>(diagnostic));
 
-                _hostUpdateSource.RaiseDiagnosticsUpdated(args);
+                // this can be null in test. but in product code, this should never be null.
+                _hostUpdateSource?.RaiseDiagnosticsUpdated(args);
             }
         }
     }

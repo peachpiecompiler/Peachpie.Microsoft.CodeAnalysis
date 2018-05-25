@@ -1,4 +1,5 @@
-﻿
+﻿' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+
 Imports System.Collections.Immutable
 Imports System.Composition
 Imports Microsoft.CodeAnalysis.CodeFixes
@@ -6,27 +7,23 @@ Imports Microsoft.CodeAnalysis.MakeMethodSynchronous
 Imports Microsoft.CodeAnalysis.VisualBasic.Syntax
 
 Namespace Microsoft.CodeAnalysis.VisualBasic.MakeMethodSynchronous
-    <ExportCodeFixProvider(LanguageNames.VisualBasic), [Shared]>
+    <ExportCodeFixProvider(LanguageNames.VisualBasic, Name:=PredefinedCodeFixProviderNames.MakeMethodSynchronous), [Shared]>
+    <ExtensionOrder(After:=PredefinedCodeFixProviderNames.AddImport)>
     Friend Class VisualBasicMakeMethodSynchronousCodeFixProvider
         Inherits AbstractMakeMethodSynchronousCodeFixProvider
 
         Private Const BC42356 As String = NameOf(BC42356) ' This async method lacks 'Await' operators and so will run synchronously.
 
-        Private Shared ReadOnly diagnosticIds As ImmutableArray(Of String) = ImmutableArray.Create(BC42356)
+        Private Shared ReadOnly s_diagnosticIds As ImmutableArray(Of String) = ImmutableArray.Create(BC42356)
 
         Public Overrides ReadOnly Property FixableDiagnosticIds As ImmutableArray(Of String)
             Get
-                Return diagnosticIds
+                Return s_diagnosticIds
             End Get
         End Property
 
-        Protected Overrides Function IsMethodOrAnonymousFunction(node As SyntaxNode) As Boolean
-            Return node.IsKind(SyntaxKind.FunctionBlock) OrElse
-                node.IsKind(SyntaxKind.SubBlock) OrElse
-                node.IsKind(SyntaxKind.MultiLineFunctionLambdaExpression) OrElse
-                node.IsKind(SyntaxKind.MultiLineSubLambdaExpression) OrElse
-                node.IsKind(SyntaxKind.SingleLineFunctionLambdaExpression) OrElse
-                node.IsKind(SyntaxKind.SingleLineSubLambdaExpression)
+        Protected Overrides Function IsAsyncSupportingFunctionSyntax(node As SyntaxNode) As Boolean
+            Return node.IsAsyncSupportedFunctionSyntax()
         End Function
 
         Protected Overrides Function RemoveAsyncTokenAndFixReturnType(methodSymbolOpt As IMethodSymbol, node As SyntaxNode, taskType As ITypeSymbol, taskOfTType As ITypeSymbol) As SyntaxNode

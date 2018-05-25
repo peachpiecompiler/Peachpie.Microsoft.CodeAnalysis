@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
+using Microsoft.CodeAnalysis.PooledObjects;
 using Roslyn.Utilities;
 
 namespace Microsoft.CodeAnalysis
@@ -93,7 +94,7 @@ namespace Microsoft.CodeAnalysis
                         _referencedAssemblies[i],
                         assemblies,
                         definitionStartIndex,
-                        assemblyIdentityComparer); 
+                        assemblyIdentityComparer);
                 }
 
                 return boundReferences;

@@ -1,16 +1,17 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Threading;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Editor.UnitTests;
 using Microsoft.CodeAnalysis.Editor.UnitTests.Workspaces;
 using Microsoft.CodeAnalysis.Shared.Extensions;
 using Microsoft.CodeAnalysis.Shared.TestHooks;
+using Microsoft.CodeAnalysis.Test.Utilities;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.VisualStudio.Text;
 using Roslyn.Test.Utilities;
@@ -18,6 +19,7 @@ using Xunit;
 
 namespace Microsoft.CodeAnalysis.UnitTests.Workspaces
 {
+    [UseExportProvider]
     public partial class WorkspaceTests
     {
         private TestWorkspace CreateWorkspace(bool disablePartialSolutions = true)
@@ -28,8 +30,9 @@ namespace Microsoft.CodeAnalysis.UnitTests.Workspaces
         private static async Task WaitForWorkspaceOperationsToComplete(TestWorkspace workspace)
         {
             var workspaceWaiter = workspace.ExportProvider
-                .GetExports<IAsynchronousOperationListener, FeatureMetadata>()
-                .First(l => l.Metadata.FeatureName == FeatureAttribute.Workspace).Value as IAsynchronousOperationWaiter;
+                                    .GetExportedValue<AsynchronousOperationListenerProvider>()
+                                    .GetWaiter(FeatureAttribute.Workspace);
+
             await workspaceWaiter.CreateWaitTask();
         }
 
@@ -153,7 +156,7 @@ namespace Microsoft.CodeAnalysis.UnitTests.Workspaces
                 var solution = workspace.CurrentSolution;
 
                 var document = new TestHostDocument(
-@"#if FOO
+@"#if GOO
 class C { }
 #else
 class D { }
@@ -166,7 +169,7 @@ class D { }
                 await VerifyRootTypeNameAsync(workspace, "D");
 
                 workspace.OnParseOptionsChanged(document.Id.ProjectId,
-                    new CSharpParseOptions(preprocessorSymbols: new[] { "FOO" }));
+                    new CSharpParseOptions(preprocessorSymbols: new[] { "GOO" }));
 
                 await VerifyRootTypeNameAsync(workspace, "C");
             }
@@ -180,7 +183,7 @@ class D { }
                 var solution = workspace.CurrentSolution;
 
                 var document = new TestHostDocument(
-@"#if FOO
+@"#if GOO
 class C { }
 #else
 class D { }
@@ -194,16 +197,16 @@ class D { }
                 await VerifyRootTypeNameAsync(workspace, "D");
 
                 workspace.OnParseOptionsChanged(document.Id.ProjectId,
-                    new CSharpParseOptions(preprocessorSymbols: new[] { "FOO" }));
+                    new CSharpParseOptions(preprocessorSymbols: new[] { "GOO" }));
 
                 await VerifyRootTypeNameAsync(workspace, "C");
 
-                workspace.OnDocumentClosed(document.Id);
+                workspace.CloseDocument(document.Id);
             }
         }
 
         [Fact]
-        public async void TestAddedSubmissionParseTreeHasEmptyFilePath()
+        public async Task TestAddedSubmissionParseTreeHasEmptyFilePath()
         {
             using (var workspace = CreateWorkspace())
             {
@@ -365,10 +368,9 @@ class D { }
                 workspace.AddTestProject(project1);
                 workspace.OnDocumentOpened(document.Id, document.GetOpenTextContainer());
 
-                Assert.Throws<ArgumentException>(() => workspace.OnProjectRemoved(project1.Id));
-
-                workspace.OnDocumentClosed(document.Id);
                 workspace.OnProjectRemoved(project1.Id);
+                Assert.False(workspace.IsDocumentOpen(document.Id));
+                Assert.Empty(workspace.CurrentSolution.Projects);
             }
         }
 
@@ -384,7 +386,7 @@ class D { }
 
                 workspace.AddTestProject(project1);
                 workspace.OnDocumentOpened(document.Id, document.GetOpenTextContainer());
-                workspace.OnDocumentClosed(document.Id);
+                workspace.CloseDocument(document.Id);
                 workspace.OnProjectRemoved(project1.Id);
             }
         }
@@ -404,7 +406,7 @@ class D { }
 
                 Assert.Throws<ArgumentException>(() => workspace.OnDocumentRemoved(document.Id));
 
-                workspace.OnDocumentClosed(document.Id);
+                workspace.CloseDocument(document.Id);
                 workspace.OnProjectRemoved(project1.Id);
             }
         }
@@ -632,7 +634,7 @@ class D { }
                     if (hasX)
                     {
                         var doc2Z = cs.GetDocument(document2.Id);
-                        var partialDoc2Z = await doc2Z.WithFrozenPartialSemanticsAsync(CancellationToken.None);
+                        var partialDoc2Z = doc2Z.WithFrozenPartialSemantics(CancellationToken.None);
                         var compilation2Z = await partialDoc2Z.Project.GetCompilationAsync();
                         var classDz = compilation2Z.SourceModule.GlobalNamespace.GetTypeMembers("D").Single();
                         var classCz = classDz.BaseType;
@@ -671,7 +673,7 @@ class D { }
                 var syntaxTree = await doc.GetSyntaxTreeAsync(CancellationToken.None);
                 Assert.True(syntaxTree.GetRoot().Width() > 0, "syntaxTree.GetRoot().Width should be > 0");
 
-                workspace.OnDocumentClosed(document.Id);
+                workspace.CloseDocument(document.Id);
                 workspace.OnProjectRemoved(project1.Id);
             }
         }
@@ -855,8 +857,8 @@ class D { }
         {
             using (var workspace = CreateWorkspace())
             {
-                var startText = @"<setting value = ""foo""";
-                var newText = @"<setting value = ""foo1""";
+                var startText = @"<setting value = ""goo""";
+                var newText = @"<setting value = ""goo1""";
                 var document = new TestHostDocument("public class C { }");
                 var additionalDoc = new TestHostDocument(startText);
                 var project1 = new TestHostProject(workspace, name: "project1", documents: new[] { document }, additionalDocuments: new[] { additionalDoc });
@@ -889,7 +891,7 @@ class D { }
         {
             using (var workspace = CreateWorkspace())
             {
-                var startText = @"<setting value = ""foo""";
+                var startText = @"<setting value = ""goo""";
                 var document = new TestHostDocument("public class C { }");
                 var additionalDoc = new TestHostDocument(startText);
                 var project1 = new TestHostProject(workspace, name: "project1", documents: new[] { document }, additionalDocuments: new[] { additionalDoc });
@@ -920,7 +922,7 @@ class D { }
         {
             using (var workspace = CreateWorkspace())
             {
-                var startText = @"<setting value = ""foo""";
+                var startText = @"<setting value = ""goo""";
                 var document = new TestHostDocument("public class C { }");
                 var additionalDoc = new TestHostDocument(startText, "original.config");
                 var project1 = new TestHostProject(workspace, name: "project1", documents: new[] { document }, additionalDocuments: new[] { additionalDoc });
@@ -958,7 +960,7 @@ class D { }
         {
             using (var workspace = CreateWorkspace())
             {
-                var startText = @"<setting value = ""foo""";
+                var startText = @"<setting value = ""goo""";
                 var document = new TestHostDocument("public class C { }");
                 var additionalDoc = new TestHostDocument(startText, "original.config");
                 var project1 = new TestHostProject(workspace, name: "project1", documents: new[] { document }, additionalDocuments: new[] { additionalDoc });
@@ -980,6 +982,52 @@ class D { }
                 Assert.Equal(1, workspace.CurrentSolution.GetProject(project1.Id).Documents.Count());
                 Assert.Equal(1, workspace.CurrentSolution.GetProject(project1.Id).AdditionalDocuments.Count());
                 Assert.Equal("original.config", workspace.CurrentSolution.GetProject(project1.Id).AdditionalDocuments.Single().Name);
+            }
+        }
+
+        [Fact, WorkItem(209299, "https://devdiv.visualstudio.com/DevDiv/_workitems?id=209299")]
+        public async Task TestLinkedFilesStayInSync()
+        {
+            var originalText = "class Program1 { }";
+            var updatedText = "class Program2 { }";
+
+            var input = $@"
+<Workspace>
+    <Project Language=""C#"" AssemblyName=""Assembly1"" CommonReferences=""true"">
+        <Document FilePath=""Test.cs"">{ originalText }</Document>
+    </Project>
+    <Project Language=""C#"" AssemblyName=""Assembly2"" CommonReferences=""true"">
+        <Document IsLinkFile=""true"" LinkAssemblyName=""Assembly1"" LinkFilePath=""Test.cs"" />
+    </Project>
+</Workspace>";
+
+            using (var workspace = TestWorkspace.Create(input, exportProvider: TestExportProvider.ExportProviderWithCSharpAndVisualBasic))
+            {
+                var eventArgs = new List<WorkspaceChangeEventArgs>();
+
+                workspace.WorkspaceChanged += (s, e) =>
+                {
+                    Assert.Equal(WorkspaceChangeKind.DocumentChanged, e.Kind);
+                    eventArgs.Add(e);
+                };
+
+                var originalDocumentId = workspace.GetOpenDocumentIds().Single(id => !workspace.GetTestDocument(id).IsLinkFile);
+                var linkedDocumentId = workspace.GetOpenDocumentIds().Single(id => workspace.GetTestDocument(id).IsLinkFile);
+
+                workspace.GetTestDocument(originalDocumentId).Update(SourceText.From("class Program2 { }"));
+                await WaitForWorkspaceOperationsToComplete(workspace);
+
+                Assert.Equal(2, eventArgs.Count);
+                AssertEx.SetEqual(workspace.Projects.SelectMany(p => p.Documents).Select(d => d.Id), eventArgs.Select(e => e.DocumentId));
+
+                Assert.Equal(eventArgs[0].OldSolution, eventArgs[1].OldSolution);
+                Assert.Equal(eventArgs[0].NewSolution, eventArgs[1].NewSolution);
+
+                Assert.Equal(originalText, (await eventArgs[0].OldSolution.GetDocument(originalDocumentId).GetTextAsync().ConfigureAwait(false)).ToString());
+                Assert.Equal(originalText, (await eventArgs[1].OldSolution.GetDocument(originalDocumentId).GetTextAsync().ConfigureAwait(false)).ToString());
+
+                Assert.Equal(updatedText, (await eventArgs[0].NewSolution.GetDocument(originalDocumentId).GetTextAsync().ConfigureAwait(false)).ToString());
+                Assert.Equal(updatedText, (await eventArgs[1].NewSolution.GetDocument(originalDocumentId).GetTextAsync().ConfigureAwait(false)).ToString());
             }
         }
     }

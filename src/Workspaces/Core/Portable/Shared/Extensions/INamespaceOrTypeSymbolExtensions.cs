@@ -12,11 +12,16 @@ namespace Microsoft.CodeAnalysis.Shared.Extensions
     {
         private static readonly ConditionalWeakTable<INamespaceOrTypeSymbol, List<string>> s_namespaceOrTypeToNameMap =
             new ConditionalWeakTable<INamespaceOrTypeSymbol, List<string>>();
+        public static readonly ConditionalWeakTable<INamespaceOrTypeSymbol, List<string>>.CreateValueCallback s_getNamePartsCallBack =
+            namespaceSymbol =>
+            {
+                var result = new List<string>();
+                GetNameParts(namespaceSymbol, result);
+                return result;
+            };
 
         private static readonly SymbolDisplayFormat s_shortNameFormat = new SymbolDisplayFormat(
             miscellaneousOptions: SymbolDisplayMiscellaneousOptions.UseSpecialTypes | SymbolDisplayMiscellaneousOptions.ExpandNullable);
-
-        public static readonly Comparison<INamespaceOrTypeSymbol> CompareNamespaceOrTypeSymbols = CompareTo;
 
         public static string GetShortName(this INamespaceOrTypeSymbol symbol)
         {
@@ -30,14 +35,34 @@ namespace Microsoft.CodeAnalysis.Shared.Extensions
                 : symbol.GetMembers(WellKnownMemberNames.Indexer).OfType<IPropertySymbol>().Where(p => p.IsIndexer);
         }
 
-        public static int CompareTo(this INamespaceOrTypeSymbol n1, INamespaceOrTypeSymbol n2)
-        {
-            var names1 = s_namespaceOrTypeToNameMap.GetValue(n1, GetNameParts);
-            var names2 = s_namespaceOrTypeToNameMap.GetValue(n2, GetNameParts);
+        public static IReadOnlyList<string> GetNameParts(this INamespaceOrTypeSymbol symbol)
+            => s_namespaceOrTypeToNameMap.GetValue(symbol, s_getNamePartsCallBack);
 
+        public static int CompareNameParts(
+            IReadOnlyList<string> names1, IReadOnlyList<string> names2, 
+            bool placeSystemNamespaceFirst)
+        {
             for (var i = 0; i < Math.Min(names1.Count, names2.Count); i++)
             {
-                var comp = names1[i].CompareTo(names2[i]);
+                var name1 = names1[i];
+                var name2 = names2[i];
+
+                if (i == 0 && placeSystemNamespaceFirst)
+                {
+                    var name1IsSystem = name1 == nameof(System);
+                    var name2IsSystem = name2 == nameof(System);
+
+                    if (name1IsSystem && !name2IsSystem)
+                    {
+                        return -1;
+                    }
+                    else if (!name1IsSystem && name2IsSystem)
+                    {
+                        return 1;
+                    }
+                }
+
+                var comp = name1.CompareTo(name2);
                 if (comp != 0)
                 {
                     return comp;
@@ -45,13 +70,6 @@ namespace Microsoft.CodeAnalysis.Shared.Extensions
             }
 
             return names1.Count - names2.Count;
-        }
-
-        private static List<string> GetNameParts(INamespaceOrTypeSymbol namespaceSymbol)
-        {
-            var result = new List<string>();
-            GetNameParts(namespaceSymbol, result);
-            return result;
         }
 
         private static void GetNameParts(INamespaceOrTypeSymbol namespaceOrTypeSymbol, List<string> result)

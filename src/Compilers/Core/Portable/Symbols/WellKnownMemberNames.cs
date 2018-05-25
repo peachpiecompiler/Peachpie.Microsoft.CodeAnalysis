@@ -254,6 +254,11 @@ namespace Microsoft.CodeAnalysis
         public const string GetEnumeratorMethodName = "GetEnumerator";
 
         /// <summary>
+        /// The required name for the <c>Deconstruct</c> method used in a deconstruction.
+        /// </summary>
+        public const string DeconstructMethodName = "Deconstruct";
+
+        /// <summary>
         /// The required name for the <c>MoveNext</c> method used in a ForEach statement.
         /// </summary>
         public const string MoveNextMethodName = "MoveNext";
@@ -279,24 +284,24 @@ namespace Microsoft.CodeAnalysis
         /// The required name for the <c>GetAwaiter</c> method used to obtain an awaiter for a task
         /// (see C# Specification, §7.7.7.1 Awaitable expressions).
         /// </summary>
-        public const string GetAwaiter = "GetAwaiter";
+        public const string GetAwaiter = nameof(GetAwaiter);
 
         /// <summary>
         /// The required name for the <c>IsCompleted</c> property used to determine if a task is already complete
         /// (see C# Specification, §7.7.7.1 Awaitable expressions).
         /// </summary>
-        public const string IsCompleted = "IsCompleted";
+        public const string IsCompleted = nameof(IsCompleted);
 
         /// <summary>
         /// The required name for the <c>GetResult</c> method used to obtain the outcome of a task once it is complete
         /// (see C# Specification, §7.7.7.1 Awaitable expressions).
         /// </summary>
-        public const string GetResult = "GetResult";
+        public const string GetResult = nameof(GetResult);
 
         /// <summary>
         /// The name of the <see cref="INotifyCompletion.OnCompleted"/> method used to register a resumption delegate
         /// (see C# Specification, §7.7.7.1 Awaitable expressions).
         /// </summary>
-        public const string OnCompleted = "OnCompleted";
+        public const string OnCompleted = nameof(OnCompleted);
     }
 }

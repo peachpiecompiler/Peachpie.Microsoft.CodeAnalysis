@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Threading;
-using Microsoft.CodeAnalysis.Semantics;
+using Microsoft.CodeAnalysis.Operations;
 
 namespace Microsoft.CodeAnalysis.Diagnostics
 {
@@ -167,12 +167,12 @@ namespace Microsoft.CodeAnalysis.Diagnostics
         public override void RegisterOperationBlockAction(Action<OperationBlockAnalysisContext> action)
         {
             DiagnosticAnalysisContextHelpers.VerifyArguments(action);
-            _scope.RegisterOperationBlockAction(this._analyzer, action);
+            _scope.RegisterOperationBlockAction(_analyzer, action);
         }
 
         public override void RegisterOperationAction(Action<OperationAnalysisContext> action, ImmutableArray<OperationKind> operationKinds)
         {
-            _scope.RegisterOperationAction(this._analyzer, action, operationKinds);
+            _scope.RegisterOperationAction(_analyzer, action, operationKinds);
         }
 
         internal override bool TryGetValueCore<TKey, TValue>(TKey key, AnalysisValueProvider<TKey, TValue> valueProvider, out TValue value)
@@ -226,9 +226,10 @@ namespace Microsoft.CodeAnalysis.Diagnostics
                                                             HostOperationBlockStartAnalysisScope scope,
                                                             ImmutableArray<IOperation> operationBlocks,
                                                             ISymbol owningSymbol,
+                                                            Compilation compilation,
                                                             AnalyzerOptions options,
                                                             CancellationToken cancellationToken)
-            : base(operationBlocks, owningSymbol, options, cancellationToken)
+            : base(operationBlocks, owningSymbol, compilation, options, cancellationToken)
         {
             _analyzer = analyzer;
             _scope = scope;
@@ -267,7 +268,7 @@ namespace Microsoft.CodeAnalysis.Diagnostics
         public GeneratedCodeAnalysisFlags GetGeneratedCodeAnalysisFlags(DiagnosticAnalyzer analyzer)
         {
             GeneratedCodeAnalysisFlags mode;
-            return _generatedCodeConfigurationMap.TryGetValue(analyzer, out mode) ? mode : GeneratedCodeAnalysisFlags.Default;
+            return _generatedCodeConfigurationMap.TryGetValue(analyzer, out mode) ? mode : AnalyzerDriver.DefaultGeneratedCodeAnalysisFlags;
         }
 
         public void RegisterCompilationStartAction(DiagnosticAnalyzer analyzer, Action<CompilationStartAnalysisContext> action)
@@ -359,7 +360,7 @@ namespace Microsoft.CodeAnalysis.Diagnostics
 
         public override ImmutableArray<OperationAnalyzerAction> OperationActions
         {
-            get { return base.OperationActions.AddRange(this._sessionScope.OperationActions); }
+            get { return base.OperationActions.AddRange(_sessionScope.OperationActions); }
         }
 
         public override AnalyzerActions GetAnalyzerActions(DiagnosticAnalyzer analyzer)
@@ -522,7 +523,7 @@ namespace Microsoft.CodeAnalysis.Diagnostics
 
         public virtual ImmutableArray<OperationAnalyzerAction> OperationActions
         {
-            get { return this._operationActions; }
+            get { return _operationActions; }
         }
 
         public virtual AnalyzerActions GetAnalyzerActions(DiagnosticAnalyzer analyzer)
@@ -565,6 +566,53 @@ namespace Microsoft.CodeAnalysis.Diagnostics
             SymbolAnalyzerAction analyzerAction = new SymbolAnalyzerAction(action, symbolKinds, analyzer);
             this.GetOrCreateAnalyzerActions(analyzer).AddSymbolAction(analyzerAction);
             _symbolActions = _symbolActions.Add(analyzerAction);
+
+            // The SymbolAnalyzerAction does not handle SymbolKind.Parameter because the compiler
+            // does not make CompilationEvents for them. As a workaround, handle them specially by
+            // registering further SymbolActions (for Methods) and utilize the results to construct
+            // the necessary SymbolAnalysisContexts.
+
+            if (symbolKinds.Contains(SymbolKind.Parameter))
+            {
+                RegisterSymbolAction(
+                    analyzer, 
+                    context => 
+                    {
+                        ImmutableArray<IParameterSymbol> parameters;
+
+                        switch (context.Symbol.Kind)
+                        {
+                            case SymbolKind.Method:
+                                parameters = ((IMethodSymbol)context.Symbol).Parameters;
+                                break;
+                            case SymbolKind.Property:
+                                parameters = ((IPropertySymbol)context.Symbol).Parameters;
+                                break;
+                            case SymbolKind.NamedType:
+                                var namedType = (INamedTypeSymbol)context.Symbol;
+                                var delegateInvokeMethod = namedType.DelegateInvokeMethod;
+                                parameters = delegateInvokeMethod?.Parameters ?? ImmutableArray.Create<IParameterSymbol>();
+                                break;
+                            default:
+                                throw new ArgumentException($"{context.Symbol.Kind} is not supported.", nameof(context));
+                        }
+
+                        foreach (var parameter in parameters)
+                        {
+                            if (!parameter.IsImplicitlyDeclared)
+                            {
+                                action(new SymbolAnalysisContext(
+                                    parameter,
+                                    context.Compilation,
+                                    context.Options,
+                                    context.ReportDiagnostic,
+                                    context.IsSupportedDiagnostic,
+                                    context.CancellationToken));
+                            }
+                        }
+                    }, 
+                    ImmutableArray.Create(SymbolKind.Method, SymbolKind.Property, SymbolKind.NamedType));
+            }   
         }
 
         public void RegisterCodeBlockStartAction<TLanguageKindEnum>(DiagnosticAnalyzer analyzer, Action<CodeBlockStartAnalysisContext<TLanguageKindEnum>> action) where TLanguageKindEnum : struct
@@ -620,7 +668,7 @@ namespace Microsoft.CodeAnalysis.Diagnostics
         {
             OperationAnalyzerAction analyzerAction = new OperationAnalyzerAction(action, operationKinds, analyzer);
             this.GetOrCreateAnalyzerActions(analyzer).AddOperationAction(analyzerAction);
-            this._operationActions = this._operationActions.Add(analyzerAction);
+            _operationActions = _operationActions.Add(analyzerAction);
         }
 
         protected AnalyzerActions GetOrCreateAnalyzerActions(DiagnosticAnalyzer analyzer)
@@ -660,8 +708,6 @@ namespace Microsoft.CodeAnalysis.Diagnostics
         private ImmutableArray<AnalyzerAction> _syntaxNodeActions = ImmutableArray<AnalyzerAction>.Empty;
         private ImmutableArray<OperationAnalyzerAction> _operationActions = ImmutableArray<OperationAnalyzerAction>.Empty;
 
-        internal static readonly AnalyzerActions Empty = new AnalyzerActions();
-
         internal AnalyzerActions()
         {
         }
@@ -673,7 +719,7 @@ namespace Microsoft.CodeAnalysis.Diagnostics
         public int SemanticModelActionsCount { get { return _semanticModelActions.Length; } }
         public int SymbolActionsCount { get { return _symbolActions.Length; } }
         public int SyntaxNodeActionsCount { get { return _syntaxNodeActions.Length; } }
-        public int OperationActionsCount { get { return this._operationActions.Length; } }
+        public int OperationActionsCount { get { return _operationActions.Length; } }
         public int OperationBlockStartActionsCount { get { return _operationBlockStartActions.Length; } }
         public int OperationBlockEndActionsCount { get { return _operationBlockEndActions.Length; } }
         public int OperationBlockActionsCount { get { return _operationBlockActions.Length; } }
@@ -748,7 +794,7 @@ namespace Microsoft.CodeAnalysis.Diagnostics
 
         internal ImmutableArray<OperationAnalyzerAction> OperationActions
         {
-            get { return this._operationActions; }
+            get { return _operationActions; }
         }
 
         internal void AddCompilationStartAction(CompilationStartAnalyzerAction action)

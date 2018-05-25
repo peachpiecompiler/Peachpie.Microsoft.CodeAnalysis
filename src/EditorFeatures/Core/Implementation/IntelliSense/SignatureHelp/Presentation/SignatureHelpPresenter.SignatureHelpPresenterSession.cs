@@ -1,10 +1,11 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.CodeAnalysis.Editor.Shared.Extensions;
 using Microsoft.CodeAnalysis.Editor.Shared.Utilities;
+using Microsoft.CodeAnalysis.SignatureHelp;
 using Microsoft.VisualStudio.Language.Intellisense;
 using Microsoft.VisualStudio.Text;
 using Microsoft.VisualStudio.Text.Editor;
@@ -30,6 +31,8 @@ namespace Microsoft.CodeAnalysis.Editor.Implementation.IntelliSense.SignatureHel
 
             private ISignatureHelpSession _editorSessionOpt;
             private bool _ignoreSelectionStatusChangedEvent;
+
+            public bool EditorSessionIsActive => _editorSessionOpt?.IsDismissed == false;
 
             public SignatureHelpPresenterSession(
                 ISignatureHelpBroker sigHelpBroker,
@@ -63,8 +66,7 @@ namespace Microsoft.CodeAnalysis.Editor.Implementation.IntelliSense.SignatureHel
                         triggerSpan.GetStartTrackingPoint(PointTrackingMode.Negative),
                         trackCaret: false);
 
-                    var debugTextView = _textView as IDebuggerTextView;
-                    if (debugTextView != null && !debugTextView.IsImmediateWindow)
+                    if (_textView is IDebuggerTextView debugTextView && !debugTextView.IsImmediateWindow)
                     {
                         debugTextView.HACK_StartCompletionSession(_editorSessionOpt);
                     }
@@ -157,8 +159,7 @@ namespace Microsoft.CodeAnalysis.Editor.Implementation.IntelliSense.SignatureHel
                     return;
                 }
 
-                SignatureHelpItem helpItem;
-                Contract.ThrowIfFalse(_signatureMap.TryGetKey((Signature)eventArgs.NewSelectedSignature, out helpItem));
+                Contract.ThrowIfFalse(_signatureMap.TryGetKey((Signature)eventArgs.NewSelectedSignature, out var helpItem));
 
                 var helpItemSelected = this.ItemSelected;
                 if (helpItemSelected != null && helpItem != null)

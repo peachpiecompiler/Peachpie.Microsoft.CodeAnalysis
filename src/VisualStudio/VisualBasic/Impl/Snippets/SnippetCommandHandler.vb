@@ -1,4 +1,4 @@
-' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 Imports System.ComponentModel.Composition
 Imports System.Threading
@@ -18,7 +18,9 @@ Imports Microsoft.VisualStudio.TextManager.Interop
 Imports Microsoft.VisualStudio.Utilities
 
 Namespace Microsoft.VisualStudio.LanguageServices.VisualBasic.Snippets
-    <ExportCommandHandler("VB Snippets", ContentTypeNames.VisualBasicContentType)>
+    <Export(GetType(Commanding.ICommandHandler))>
+    <ContentType(ContentTypeNames.VisualBasicContentType)>
+    <Name("VB Snippets")>
     <Order(After:=PredefinedCommandHandlerNames.Completion)>
     <Order(After:=PredefinedCommandHandlerNames.IntelliSense)>
     Friend NotInheritable Class SnippetCommandHandler
@@ -30,7 +32,7 @@ Namespace Microsoft.VisualStudio.LanguageServices.VisualBasic.Snippets
         End Sub
 
         Protected Overrides Function IsSnippetExpansionContext(document As Document, startPosition As Integer, cancellationToken As CancellationToken) As Boolean
-            Dim syntaxTree = document.GetSyntaxTreeAsync(CancellationToken.None).WaitAndGetResult(cancellationToken)
+            Dim syntaxTree = document.GetSyntaxTreeSynchronously(CancellationToken.None)
 
             Return Not syntaxTree.IsEntirelyWithinStringOrCharOrNumericLiteral(startPosition, cancellationToken) AndAlso
                 Not syntaxTree.IsEntirelyWithinComment(startPosition, cancellationToken) AndAlso
@@ -41,13 +43,12 @@ Namespace Microsoft.VisualStudio.LanguageServices.VisualBasic.Snippets
             Return SnippetExpansionClient.GetSnippetExpansionClient(textView, subjectBuffer, EditorAdaptersFactoryService)
         End Function
 
-        Protected Overrides Sub InvokeInsertionUI(textView As ITextView, subjectBuffer As ITextBuffer, nextHandler As Action, Optional surroundWith As Boolean = False)
+        Protected Overrides Function TryInvokeInsertionUI(textView As ITextView, subjectBuffer As ITextBuffer, Optional surroundWith As Boolean = False) As Boolean
             Debug.Assert(Not surroundWith)
 
             Dim expansionManager As IVsExpansionManager = Nothing
             If Not TryGetExpansionManager(expansionManager) Then
-                nextHandler()
-                Return
+                Return False
             End If
 
             expansionManager.InvokeInsertionUI(
@@ -60,10 +61,12 @@ Namespace Microsoft.VisualStudio.LanguageServices.VisualBasic.Snippets
                 bstrKinds:=Nothing,
                 iCountKinds:=0,
                 fIncludeNULLKind:=1,
-                bstrPrefixText:=BasicVSResources.InsertSnippet,
+                bstrPrefixText:=BasicVSResources.Insert_Snippet,
                 bstrCompletionChar:=">"c)
 
-        End Sub
+            Return True
+
+        End Function
 
         Protected Overrides Function TryInvokeSnippetPickerOnQuestionMark(textView As ITextView, subjectBuffer As ITextBuffer) As Boolean
             Dim text = subjectBuffer.AsTextContainer().CurrentText
@@ -73,7 +76,7 @@ Namespace Microsoft.VisualStudio.LanguageServices.VisualBasic.Snippets
                 (caretPosition = 1 AndAlso text(0) = "?"c) Then
 
                 DeleteQuestionMark(textView, subjectBuffer, caretPosition)
-                InvokeInsertionUI(textView, subjectBuffer, Sub() Return)
+                TryInvokeInsertionUI(textView, subjectBuffer)
                 Return True
             End If
 
@@ -90,6 +93,5 @@ Namespace Microsoft.VisualStudio.LanguageServices.VisualBasic.Snippets
                 editorWorkspace.ApplyTextChanges(document.Id, change, CancellationToken.None)
             End If
         End Sub
-
     End Class
 End Namespace

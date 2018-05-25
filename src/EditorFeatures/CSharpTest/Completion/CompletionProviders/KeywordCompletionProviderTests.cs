@@ -5,6 +5,7 @@ using Microsoft.CodeAnalysis.Completion;
 using Microsoft.CodeAnalysis.CSharp.Completion.Providers;
 using Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.Completion.CompletionProviders;
 using Microsoft.CodeAnalysis.Editor.UnitTests.Workspaces;
+using Microsoft.CodeAnalysis.Test.Utilities;
 using Roslyn.Test.Utilities;
 using Xunit;
 
@@ -16,7 +17,7 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.IntelliSense.Completion
         {
         }
 
-        internal override CompletionListProvider CreateCompletionProvider()
+        internal override CompletionProvider CreateCompletionProvider()
         {
             return new KeywordCompletionProvider();
         }
@@ -28,16 +29,17 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.IntelliSense.Completion
         }
 
         [Fact, Trait(Traits.Feature, Traits.Features.KeywordRecommending)]
-        public async Task IsTextualTriggerCharacterTest()
+        public void IsTextualTriggerCharacterTest()
         {
-            await TestCommonIsTextualTriggerCharacterAsync();
+            TestCommonIsTextualTriggerCharacter();
         }
 
         [Fact, Trait(Traits.Feature, Traits.Features.KeywordRecommending)]
         public async Task SendEnterThroughToEditorTest()
         {
-            await VerifySendEnterThroughToEnterAsync("$$", "class", sendThroughEnterEnabled: false, expected: false);
-            await VerifySendEnterThroughToEnterAsync("$$", "class", sendThroughEnterEnabled: true, expected: true);
+            await VerifySendEnterThroughToEnterAsync("$$", "class", sendThroughEnterOption: EnterKeyRule.Never, expected: false);
+            await VerifySendEnterThroughToEnterAsync("$$", "class", sendThroughEnterOption: EnterKeyRule.AfterFullyTypedWord, expected: true);
+            await VerifySendEnterThroughToEnterAsync("$$", "class", sendThroughEnterOption: EnterKeyRule.Always, expected: true);
         }
 
         [Fact, Trait(Traits.Feature, Traits.Features.KeywordRecommending)]
@@ -235,17 +237,17 @@ $$
         public async Task UnionOfItemsFromBothContexts()
         {
             var markup = @"<Workspace>
-    <Project Language=""C#"" CommonReferences=""true"" AssemblyName=""Proj1"" PreprocessorSymbols=""FOO"">
+    <Project Language=""C#"" CommonReferences=""true"" AssemblyName=""Proj1"" PreprocessorSymbols=""GOO"">
         <Document FilePath=""CurrentDocument.cs""><![CDATA[
 class C
 {
-#if FOO
-    void foo() {
+#if GOO
+    void goo() {
 #endif
 
 $$
 
-#if FOO
+#if GOO
     }
 #endif
 }
@@ -258,6 +260,123 @@ $$
 </Workspace>";
             await VerifyItemInLinkedFilesAsync(markup, "public", null);
             await VerifyItemInLinkedFilesAsync(markup, "for", null);
+        }
+
+        [WorkItem(7768, "https://github.com/dotnet/roslyn/issues/7768")]
+        [WorkItem(8228, "https://github.com/dotnet/roslyn/issues/8228")]
+        [WpfFact, Trait(Traits.Feature, Traits.Features.Completion)]
+        public async Task FormattingAfterCompletionCommit_AfterGetAccessorInSingleLineIncompleteProperty()
+        {
+            var markupBeforeCommit = @"class Program
+{
+    int P {g$$
+    void Main() { }
+}";
+
+            var expectedCodeAfterCommit = @"class Program
+{
+    int P {get;
+    void Main() { }
+}";
+            await VerifyProviderCommitAsync(markupBeforeCommit, "get", expectedCodeAfterCommit, commitChar: ';', textTypedSoFar: "g");
+        }
+
+        [WorkItem(7768, "https://github.com/dotnet/roslyn/issues/7768")]
+        [WorkItem(8228, "https://github.com/dotnet/roslyn/issues/8228")]
+        [WpfFact, Trait(Traits.Feature, Traits.Features.Completion)]
+        public async Task FormattingAfterCompletionCommit_AfterBothAccessorsInSingleLineIncompleteProperty()
+        {
+            var markupBeforeCommit = @"class Program
+{
+    int P {get;set$$
+    void Main() { }
+}";
+
+            var expectedCodeAfterCommit = @"class Program
+{
+    int P {get;set;
+    void Main() { }
+}";
+            await VerifyProviderCommitAsync(markupBeforeCommit, "set", expectedCodeAfterCommit, commitChar: ';', textTypedSoFar: "set");
+        }
+
+        [WorkItem(7768, "https://github.com/dotnet/roslyn/issues/7768")]
+        [WorkItem(8228, "https://github.com/dotnet/roslyn/issues/8228")]
+        [WpfFact, Trait(Traits.Feature, Traits.Features.Completion)]
+        public async Task FormattingAfterCompletionCommit_InSingleLineMethod()
+        {
+            var markupBeforeCommit = @"class Program
+{
+    public static void Test() { return$$
+    void Main() { }
+}";
+
+            var expectedCodeAfterCommit = @"class Program
+{
+    public static void Test() { return;
+    void Main() { }
+}";
+            await VerifyProviderCommitAsync(markupBeforeCommit, "return", expectedCodeAfterCommit, commitChar: ';', textTypedSoFar: "return");
+        }
+
+        [WorkItem(14218, "https://github.com/dotnet/roslyn/issues/14218")]
+        [WpfFact, Trait(Traits.Feature, Traits.Features.Completion)]
+        public async Task PredefinedTypeKeywordsShouldBeRecommendedAfterCaseInASwitch()
+        {
+            var text = @"
+class Program
+{
+    public static void Test()
+    {
+        object o = null;
+        switch (o)
+        {
+            case $$
+        }
+    }
+}";
+
+            await VerifyItemExistsAsync(text, "int");
+            await VerifyItemExistsAsync(text, "string");
+            await VerifyItemExistsAsync(text, "byte");
+            await VerifyItemExistsAsync(text, "char");
+        }
+    
+        [WpfFact, Trait(Traits.Feature, Traits.Features.Completion)]
+        public async Task PrivateOrProtectedModifiers()
+        {
+            var text = @"
+class C
+{
+$$
+}";
+
+            await VerifyItemExistsAsync(text, "private");
+            await VerifyItemExistsAsync(text, "protected");
+        }
+
+        [WpfFact, Trait(Traits.Feature, Traits.Features.Completion)]
+        public async Task PrivateProtectedModifier()
+        {
+            var text = @"
+class C
+{
+    private $$
+}";
+
+            await VerifyItemExistsAsync(text, "protected");
+        }
+
+        [WpfFact, Trait(Traits.Feature, Traits.Features.Completion)]
+        public async Task ProtectedPrivateModifier()
+        {
+            var text = @"
+class C
+{
+    protected $$
+}";
+
+            await VerifyItemExistsAsync(text, "private");
         }
     }
 }

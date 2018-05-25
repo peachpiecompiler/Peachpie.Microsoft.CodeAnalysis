@@ -3,7 +3,7 @@
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
-using Microsoft.CodeAnalysis.Semantics;
+using Microsoft.CodeAnalysis.Operations;
 using Roslyn.Utilities;
 
 namespace Microsoft.CodeAnalysis.Diagnostics
@@ -25,7 +25,7 @@ namespace Microsoft.CodeAnalysis.Diagnostics
             /// </summary>
             public OperationBlockAnalyzerStateData OperationBlockAnalysisState { get; }
 
-            public static readonly DeclarationAnalyzerStateData FullyProcessedInstance = CreateFullyProcessedInstance();
+            public new static readonly DeclarationAnalyzerStateData FullyProcessedInstance = CreateFullyProcessedInstance();
 
             public DeclarationAnalyzerStateData()
             {
@@ -150,7 +150,7 @@ namespace Microsoft.CodeAnalysis.Diagnostics
         /// </summary>
         internal sealed class CodeBlockAnalyzerStateData : BlockAnalyzerStateData<CodeBlockAnalyzerAction, SyntaxNodeAnalyzerStateData>
         {
-            }
+        }
 
         /// <summary>
         /// Stores the partial analysis state for operation block actions executed on the declaration.

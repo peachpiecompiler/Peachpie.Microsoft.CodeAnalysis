@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Immutable;
 using System.Diagnostics;
+using Microsoft.CodeAnalysis.PooledObjects;
 
 namespace Microsoft.CodeAnalysis.CSharp
 {
@@ -168,7 +169,7 @@ namespace Microsoft.CodeAnalysis.CSharp
         /// </remarks>
         public static string FormatLiteral(string value, bool quote)
         {
-            var options = ObjectDisplayOptions.EscapeNonPrintableCharacters | 
+            var options = ObjectDisplayOptions.EscapeNonPrintableCharacters |
                 (quote ? ObjectDisplayOptions.UseQuotes : ObjectDisplayOptions.None);
             return ObjectDisplay.FormatLiteral(value, options);
         }
@@ -184,7 +185,7 @@ namespace Microsoft.CodeAnalysis.CSharp
         /// </remarks>
         public static string FormatLiteral(char c, bool quote)
         {
-            var options = ObjectDisplayOptions.EscapeNonPrintableCharacters | 
+            var options = ObjectDisplayOptions.EscapeNonPrintableCharacters |
                 (quote ? ObjectDisplayOptions.UseQuotes : ObjectDisplayOptions.None);
             return ObjectDisplay.FormatLiteral(c, options);
         }

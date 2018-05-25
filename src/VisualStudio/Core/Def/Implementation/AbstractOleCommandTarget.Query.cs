@@ -12,11 +12,6 @@ using Microsoft.VisualStudio.Text;
 using Microsoft.VisualStudio.Text.Editor;
 using Roslyn.Utilities;
 
-#if INTERACTIVE
-using InteractiveCommandIds = Microsoft.VisualStudio.LanguageServices.InteractiveWindow.CommandIds;
-using InteractiveGuids = Microsoft.VisualStudio.LanguageServices.InteractiveWindow.Guids;
-#endif
-
 namespace Microsoft.VisualStudio.LanguageServices.Implementation
 {
     internal abstract partial class AbstractOleCommandTarget
@@ -42,12 +37,10 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation
             {
                 return QueryVisualStudio97Status(ref pguidCmdGroup, commandCount, prgCmds, commandText);
             }
-#if INTERACTIVE
-            else if (pguidCmdGroup == InteractiveGuids.InteractiveCommandSetId)
+            else if (pguidCmdGroup == Guids.InteractiveCommandSetId)
             {
-                return QueryInteractiveCommandStatus(ref pguidCmdGroup, commandCount, prgCmds, commandText);
+                return QueryInteractiveStatus(ref pguidCmdGroup, commandCount, prgCmds, commandText);
             }
-#endif
             else if (pguidCmdGroup == VSConstants.VsStd14)
             {
                 return QueryVisualStudio2014Status(ref pguidCmdGroup, commandCount, prgCmds, commandText);
@@ -114,21 +107,9 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation
         {
             switch (prgCmds[0].cmdID)
             {
-                case ID.CSharpCommands.OrganizeSortUsings:
-                case ID.CSharpCommands.ContextOrganizeSortUsings:
-                    return QuerySortUsingsStatus(ref pguidCmdGroup, commandCount, prgCmds, commandText);
-
-                case ID.CSharpCommands.OrganizeRemoveUnusedUsings:
-                case ID.CSharpCommands.ContextOrganizeRemoveUnusedUsings:
-                    return QueryRemoveUnusedUsingsStatus(ref pguidCmdGroup, commandCount, prgCmds, commandText);
-
                 case ID.CSharpCommands.OrganizeRemoveAndSort:
                 case ID.CSharpCommands.ContextOrganizeRemoveAndSort:
                     return QuerySortAndRemoveUnusedUsingsStatus(ref pguidCmdGroup, commandCount, prgCmds, commandText);
-
-                case ID.Menu.Organize:
-                case ID.Menu.ContextOrganize:
-                    return QueryOrganizeMenu(ref pguidCmdGroup, commandCount, prgCmds, commandText);
 
                 default:
                     return NextCommandTarget.QueryStatus(ref pguidCmdGroup, commandCount, prgCmds, commandText);
@@ -184,9 +165,6 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation
                 case VSConstants.VSStd2KCmdID.PARAMINFO:
                     return QueryParameterInfoStatus(prgCmds);
 
-                case VSConstants.VSStd2KCmdID.QUICKINFO:
-                    return QueryQuickInfoStatus(prgCmds);
-
                 case VSConstants.VSStd2KCmdID.RENAME:
                     return QueryRenameStatus(ref pguidCmdGroup, commandCount, prgCmds, commandText);
 
@@ -231,22 +209,18 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation
             }
         }
 
-#if INTERACTIVE
-        private int QueryInteractiveCommandStatus(ref Guid pguidCmdGroup, uint commandCount, OLECMD[] prgCmds, IntPtr commandText)
+        /// <remarks>TODO: Revert the change to use standard VS11 command pending https://github.com/dotnet/roslyn/issues/8927 .</remarks>
+        private int QueryInteractiveStatus(ref Guid pguidCmdGroup, uint commandCount, OLECMD[] prgCmds, IntPtr commandText)
         {
-            switch ((InteractiveCommandIds)prgCmds[0].cmdID)
+            switch (prgCmds[0].cmdID)
             {
-                case InteractiveCommandIds.ExecuteInInteractiveWindow:
-                    return QueryExecuteInInteractiveWindowStatus(ref pguidCmdGroup, commandCount, prgCmds, commandText);
-
-                case InteractiveCommandIds.CopyToInteractiveWindow:
-                    return QueryCopyToInteractiveWindowStatus(ref pguidCmdGroup, commandCount, prgCmds, commandText);
+                case ID.InteractiveCommands.ExecuteInInteractiveWindow:
+                    return QueryExecuteInInteractiveWindowStatus(ref pguidCmdGroup, commandCount, prgCmds, commandText); ;
 
                 default:
                     return NextCommandTarget.QueryStatus(ref pguidCmdGroup, commandCount, prgCmds, commandText);
             }
         }
-#endif
 
         private int GetCommandState<T>(
             Func<ITextView, ITextBuffer, T> createArgs,
@@ -259,14 +233,14 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation
             var result = VSConstants.S_OK;
 
             var guidCmdGroup = pguidCmdGroup;
-            Func<CommandState> executeNextCommandTarget = () =>
+            CommandState executeNextCommandTarget()
             {
                 result = NextCommandTarget.QueryStatus(ref guidCmdGroup, commandCount, prgCmds, commandText);
 
                 var isAvailable = ((OLECMDF)prgCmds[0].cmdf & OLECMDF.OLECMDF_ENABLED) == OLECMDF.OLECMDF_ENABLED;
                 var isChecked = ((OLECMDF)prgCmds[0].cmdf & OLECMDF.OLECMDF_LATCHED) == OLECMDF.OLECMDF_LATCHED;
                 return new CommandState(isAvailable, isChecked, GetText(commandText));
-            };
+            }
 
             CommandState commandState;
             var subjectBuffer = GetSubjectBufferContainingCaret();
@@ -339,45 +313,25 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation
             return VSConstants.S_OK;
         }
 
-        private int QuerySortUsingsStatus(ref Guid pguidCmdGroup, uint commandCount, OLECMD[] prgCmds, IntPtr commandText)
-        {
-            return GetCommandState(
-                (v, b) => new SortImportsCommandArgs(v, b),
-                ref pguidCmdGroup, commandCount, prgCmds, commandText);
-        }
-
-        private int QueryRemoveUnusedUsingsStatus(ref Guid pguidCmdGroup, uint commandCount, OLECMD[] prgCmds, IntPtr commandText)
-        {
-            return GetCommandState(
-                (v, b) => new RemoveUnnecessaryImportsCommandArgs(v, b),
-                ref pguidCmdGroup, commandCount, prgCmds, commandText);
-        }
-
         private int QuerySortAndRemoveUnusedUsingsStatus(ref Guid pguidCmdGroup, uint commandCount, OLECMD[] prgCmds, IntPtr commandText)
-        {
-            return GetCommandState(
-                (v, b) => new SortAndRemoveUnnecessaryImportsCommandArgs(v, b),
-                ref pguidCmdGroup, commandCount, prgCmds, commandText);
-        }
-
-        private int QueryOrganizeMenu(ref Guid pguidCmdGroup, uint commandCount, OLECMD[] prgCmds, IntPtr commandText)
         {
             var textBuffer = GetSubjectBufferContainingCaret();
 
             if (textBuffer != null)
             {
-                Workspace workspace;
-                if (Workspace.TryGetWorkspace(textBuffer.AsTextContainer(), out workspace))
+                if (CodeAnalysis.Workspace.TryGetWorkspace(textBuffer.AsTextContainer(), out var workspace))
                 {
                     var organizeImportsService = workspace.Services.GetLanguageServices(textBuffer).GetService<IOrganizeImportsService>();
                     if (organizeImportsService != null)
                     {
-                        SetText(commandText, organizeImportsService.OrganizeImportsDisplayStringWithAccelerator);
+                        SetText(commandText, organizeImportsService.SortAndRemoveUnusedImportsDisplayStringWithAccelerator);
                     }
                 }
             }
 
-            return NextCommandTarget.QueryStatus(ref pguidCmdGroup, commandCount, prgCmds, commandText);
+            return GetCommandState(
+                (v, b) => new SortAndRemoveUnnecessaryImportsCommandArgs(v, b),
+                ref pguidCmdGroup, commandCount, prgCmds, commandText);
         }
 
         private int QueryRenameStatus(ref Guid pguidCmdGroup, uint commandCount, OLECMD[] prgCmds, IntPtr commandText)
@@ -385,12 +339,6 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation
             return GetCommandState(
                 (v, b) => new RenameCommandArgs(v, b),
                 ref pguidCmdGroup, commandCount, prgCmds, commandText);
-        }
-
-        private int QueryQuickInfoStatus(OLECMD[] prgCmds)
-        {
-            prgCmds[0].cmdf = (uint)(OLECMDF.OLECMDF_ENABLED | OLECMDF.OLECMDF_SUPPORTED);
-            return VSConstants.S_OK;
         }
 
         private int QueryParameterInfoStatus(OLECMD[] prgCmds)
@@ -488,13 +436,6 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation
         {
             return GetCommandState(
                 (v, b) => new ExecuteInInteractiveCommandArgs(v, b),
-                ref pguidCmdGroup, commandCount, prgCmds, commandText);
-        }
-
-        private int QueryCopyToInteractiveWindowStatus(ref Guid pguidCmdGroup, uint commandCount, OLECMD[] prgCmds, IntPtr commandText)
-        {
-            return GetCommandState(
-                (v, b) => new CopyToInteractiveCommandArgs(v, b),
                 ref pguidCmdGroup, commandCount, prgCmds, commandText);
         }
 

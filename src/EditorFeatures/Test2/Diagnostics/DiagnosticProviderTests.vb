@@ -1,11 +1,10 @@
-' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 Imports System.Collections.Immutable
 Imports Microsoft.CodeAnalysis.CSharp
 Imports Microsoft.CodeAnalysis.Diagnostics
 Imports Microsoft.CodeAnalysis.Editor.UnitTests
 Imports Microsoft.CodeAnalysis.Editor.UnitTests.Workspaces
-Imports Microsoft.CodeAnalysis.Options
 Imports Microsoft.CodeAnalysis.Shared.Options
 Imports Microsoft.CodeAnalysis.SolutionCrawler
 Imports Microsoft.CodeAnalysis.VisualBasic
@@ -16,6 +15,7 @@ Namespace Microsoft.CodeAnalysis.Editor.Implementation.Diagnostics.UnitTests
     ''' <summary>
     ''' Tests for Error List. Since it is language agnostic there are no C# or VB Specific tests
     ''' </summary>
+    <[UseExportProvider]>
     Public Class DiagnosticProviderTests
         Private Const s_errorElementName As String = "Error"
         Private Const s_projectAttributeName As String = "Project"
@@ -34,7 +34,7 @@ Namespace Microsoft.CodeAnalysis.Editor.Implementation.Diagnostics.UnitTests
             Dim test = <Workspace>
                            <Project Language="C#" CommonReferences="true">
                                <Document FilePath="Test.cs">
-                                        class Foo { }
+                                        class Goo { }
                                     </Document>
                            </Project>
                        </Workspace>
@@ -47,7 +47,7 @@ Namespace Microsoft.CodeAnalysis.Editor.Implementation.Diagnostics.UnitTests
             Dim test = <Workspace>
                            <Project Language="C#" CommonReferences="true">
                                <Document FilePath="Test.cs">
-                                        class Foo { dontcompile }
+                                        class Goo { dontcompile }
                                     </Document>
                            </Project>
                        </Workspace>
@@ -64,11 +64,11 @@ Namespace Microsoft.CodeAnalysis.Editor.Implementation.Diagnostics.UnitTests
             Dim test = <Workspace>
                            <Project Language="C#" CommonReferences="true">
                                <Document FilePath="Test.cs">
-                                        class Foo { dontcompile }
+                                        class Goo { dontcompile }
                                         #line 1000
-                                        class Foo2 { dontcompile }
+                                        class Goo2 { dontcompile }
                                         #line default
-                                        class Foo4 { dontcompile }
+                                        class Goo4 { dontcompile }
                                     </Document>
                            </Project>
                        </Workspace>
@@ -89,7 +89,7 @@ Namespace Microsoft.CodeAnalysis.Editor.Implementation.Diagnostics.UnitTests
             Dim test = <Workspace>
                            <Project Language="C#" CommonReferences="true">
                                <Document FilePath="Test.cs">
-                                        class Foo { int a = "test"; }
+                                        class Goo { int a = "test"; }
                                     </Document>
                            </Project>
                        </Workspace>
@@ -107,9 +107,9 @@ Namespace Microsoft.CodeAnalysis.Editor.Implementation.Diagnostics.UnitTests
             Dim test = <Workspace>
                            <Project Language="C#" CommonReferences="true">
                                <Document FilePath="Test.cs">
-                                        class Foo { gibberish }
-                                        class Foo2 { as; }
-                                        class Foo3 { long q = 1l; }
+                                        class Goo { gibberish }
+                                        class Goo2 { as; }
+                                        class Goo3 { long q = 1l; }
                                         #pragma disable 9999999"
                                     </Document>
                            </Project>
@@ -128,7 +128,7 @@ Namespace Microsoft.CodeAnalysis.Editor.Implementation.Diagnostics.UnitTests
 
             ' Note: The below is removed because of bug # 550593.
             '<Warning Code = "414" Id="CS0414" MappedFile="Test.cs" MappedLine="3" MappedColumn="58" OriginalFile="Test.cs" OriginalLine="3" OriginalColumn="58"
-            '    Message = "The field 'Foo3.q' is assigned but its value is never used" />
+            '    Message = "The field 'Goo3.q' is assigned but its value is never used" />
 
             VerifyAllAvailableDiagnostics(test, diagnostics)
         End Sub
@@ -171,7 +171,7 @@ Namespace Microsoft.CodeAnalysis.Editor.Implementation.Diagnostics.UnitTests
                            </Project>
                            <Project Language="Visual Basic" CommonReferences="true">
                                <Document FilePath="Test.vb">
-                                        Class FooClass
+                                        Class GooClass
                                             Sub Blah() End Sub
                                         End Class
                                    </Document>
@@ -209,7 +209,7 @@ Namespace Microsoft.CodeAnalysis.Editor.Implementation.Diagnostics.UnitTests
                            </Project>
                            <Project Language="Visual Basic" CommonReferences="true">
                                <Document FilePath="Test.vb">
-                                        Class FooClass
+                                        Class GooClass
                                             Sub Blah() End Sub
                                         End Class
                                    </Document>
@@ -277,11 +277,10 @@ Namespace Microsoft.CodeAnalysis.Editor.Implementation.Diagnostics.UnitTests
 
                 ' turn off diagnostic
                 If Not enabled Then
-                    Dim optionService = workspace.Services.GetService(Of IOptionService)()
-                    optionService.SetOptions(
-                        optionService.GetOptions().WithChangedOption(ServiceComponentOnOffOptions.DiagnosticProvider, False) _
+                    workspace.Options = workspace.Options _
+                                                  .WithChangedOption(ServiceComponentOnOffOptions.DiagnosticProvider, False) _
                                                   .WithChangedOption(ServiceFeatureOnOffOptions.ClosedFileDiagnostic, LanguageNames.CSharp, False) _
-                                                  .WithChangedOption(ServiceFeatureOnOffOptions.ClosedFileDiagnostic, LanguageNames.VisualBasic, False))
+                                                  .WithChangedOption(ServiceFeatureOnOffOptions.ClosedFileDiagnostic, LanguageNames.VisualBasic, False)
                 End If
 
                 Dim registrationService = workspace.Services.GetService(Of ISolutionCrawlerRegistrationService)()

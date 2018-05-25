@@ -2,7 +2,7 @@
 
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis.Editor.CSharp.KeywordHighlighting.KeywordHighlighters;
-using Roslyn.Test.Utilities;
+using Microsoft.CodeAnalysis.Test.Utilities;
 using Xunit;
 
 namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.KeywordHighlighting
@@ -20,6 +20,7 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.KeywordHighlighting
             await TestAsync(
 @"using System;
 using System.Threading.Tasks;
+
 class AsyncExample
 {
     async Task<int> AsyncMethod()
@@ -34,16 +35,12 @@ class AsyncExample
         {
             return [|await|] AsyncMethod();
         };
-
         int result = await AsyncMethod();
-
         Task<int> resultTask = AsyncMethod();
         result = await resultTask;
-
         result = await lambda();
     }
-}
-");
+}");
         }
     }
 }

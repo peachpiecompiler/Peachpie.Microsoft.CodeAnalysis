@@ -2,10 +2,8 @@
 
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Threading;
-using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Test.Utilities;
 using Microsoft.CodeAnalysis.UnitTests;
 using Roslyn.Test.Utilities;
@@ -14,6 +12,7 @@ using Xunit;
 
 namespace Microsoft.CodeAnalysis.Host.UnitTests
 {
+    [UseExportProvider]
     public class ProjectDependencyGraphTests : TestBase
     {
         #region GetTopologicallySortedProjects
@@ -157,8 +156,7 @@ namespace Microsoft.CodeAnalysis.Host.UnitTests
                 {
                     foreach (var referencedProjectName in referencedProjectNames)
                     {
-                        List<string> bucket;
-                        if (!references.TryGetValue(projectName, out bucket))
+                        if (!references.TryGetValue(projectName, out var bucket))
                         {
                             bucket = new List<string>();
                             references.Add(projectName, bucket);

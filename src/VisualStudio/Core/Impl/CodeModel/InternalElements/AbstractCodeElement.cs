@@ -1,8 +1,9 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Threading;
 using Microsoft.CodeAnalysis;
 using Microsoft.VisualStudio.LanguageServices.Implementation.Interop;
 using Microsoft.VisualStudio.LanguageServices.Implementation.Utilities;
@@ -56,9 +57,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.CodeModel.Inter
 
         internal bool IsValidNode()
         {
-            var node = LookupNode();
-
-            if (node == null)
+            if (!TryLookupNode(out var node))
             {
                 return false;
             }
@@ -72,7 +71,17 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.CodeModel.Inter
             return true;
         }
 
-        internal abstract SyntaxNode LookupNode();
+        internal virtual SyntaxNode LookupNode()
+        {
+            if (!TryLookupNode(out var node))
+            {
+                throw Exceptions.ThrowEFail();
+            }
+
+            return node;
+        }
+
+        internal abstract bool TryLookupNode(out SyntaxNode node);
 
         internal virtual ISymbol LookupSymbol()
         {
@@ -144,7 +153,8 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.CodeModel.Inter
         {
             get
             {
-                var point = FileCodeModel.EnsureEditor(() => CodeModelService.GetStartPoint(LookupNode()));
+                var options = GetDocument().GetOptionsAsync(CancellationToken.None).WaitAndGetResult_CodeModel(CancellationToken.None);
+                var point = CodeModelService.GetStartPoint(LookupNode(), options);
                 if (point == null)
                 {
                     return null;
@@ -158,7 +168,8 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.CodeModel.Inter
         {
             get
             {
-                var point = CodeModelService.GetEndPoint(LookupNode());
+                var options = GetDocument().GetOptionsAsync(CancellationToken.None).WaitAndGetResult_CodeModel(CancellationToken.None);
+                var point = CodeModelService.GetEndPoint(LookupNode(), options);
                 if (point == null)
                 {
                     return null;
@@ -170,7 +181,8 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.CodeModel.Inter
 
         public virtual EnvDTE.TextPoint GetStartPoint(EnvDTE.vsCMPart part)
         {
-            var point = FileCodeModel.EnsureEditor(() => CodeModelService.GetStartPoint(LookupNode(), part));
+            var options = GetDocument().GetOptionsAsync(CancellationToken.None).WaitAndGetResult_CodeModel(CancellationToken.None);
+            var point = CodeModelService.GetStartPoint(LookupNode(), options, part);
             if (point == null)
             {
                 return null;
@@ -181,7 +193,8 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.CodeModel.Inter
 
         public virtual EnvDTE.TextPoint GetEndPoint(EnvDTE.vsCMPart part)
         {
-            var point = CodeModelService.GetEndPoint(LookupNode(), part);
+            var options = GetDocument().GetOptionsAsync(CancellationToken.None).WaitAndGetResult_CodeModel(CancellationToken.None);
+            var point = CodeModelService.GetEndPoint(LookupNode(), options, part);
             if (point == null)
             {
                 return null;

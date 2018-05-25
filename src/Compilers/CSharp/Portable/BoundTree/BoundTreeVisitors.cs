@@ -48,8 +48,8 @@ namespace Microsoft.CodeAnalysis.CSharp
                     return VisitArrayAccess(node as BoundArrayAccess, arg);
                 case BoundKind.TypeOfOperator:
                     return VisitTypeOfOperator(node as BoundTypeOfOperator, arg);
-                case BoundKind.DefaultOperator:
-                    return VisitDefaultOperator(node as BoundDefaultOperator, arg);
+                case BoundKind.DefaultExpression:
+                    return VisitDefaultExpression(node as BoundDefaultExpression, arg);
                 case BoundKind.IsOperator:
                     return VisitIsOperator(node as BoundIsOperator, arg);
                 case BoundKind.AsOperator:
@@ -161,7 +161,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             public readonly BoundNode Node;
 
             public CancelledByStackGuardException(Exception inner, BoundNode node)
-                : base (inner.Message, inner)
+                : base(inner.Message, inner)
             {
                 Node = node;
             }

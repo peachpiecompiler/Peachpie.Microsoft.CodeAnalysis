@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Diagnostics;
@@ -40,19 +40,31 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.CodeModel.Inter
 
         internal override SyntaxNode LookupNode()
         {
+            if (!TryLookupNode(out var node))
+            {
+                throw Exceptions.ThrowEUnexpected();
+            }
+
+            return node;
+        }
+
+        internal override bool TryLookupNode(out SyntaxNode node)
+        {
+            node = null;
+            
             var attributeNode = _parentHandle.Value.LookupNode();
             if (attributeNode == null)
             {
-                throw Exceptions.ThrowEUnexpected();
+                return false;
             }
 
-            SyntaxNode attributeArgumentNode;
-            if (!CodeModelService.TryGetAttributeArgumentNode(attributeNode, _index, out attributeArgumentNode))
+            if (!CodeModelService.TryGetAttributeArgumentNode(attributeNode, _index, out var attributeArgumentNode))
             {
-                throw Exceptions.ThrowEUnexpected();
+                return false;
             }
 
-            return attributeArgumentNode;
+            node = attributeArgumentNode;
+            return node != null;
         }
 
         public override EnvDTE.vsCMElement Kind

@@ -1,9 +1,10 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Globalization;
 using System.Reflection;
 using System.Text;
+using Microsoft.CodeAnalysis.PooledObjects;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Collections;
 
@@ -93,7 +94,7 @@ namespace Microsoft.CodeAnalysis.Scripting.Hosting
 
             if (typeArguments.Length == 0)
             {
-                return "";
+                throw new ArgumentException(null, nameof(typeArguments));
             }
 
             var pooled = PooledStringBuilder.GetInstance();
@@ -202,9 +203,9 @@ namespace Microsoft.CodeAnalysis.Scripting.Hosting
         private void AppendArrayBound(StringBuilder sb, long bound, int numberRadix)
         {
             var options = new CommonPrimitiveFormatterOptions(
-                numberRadix: numberRadix, 
-                includeCodePoints: false, 
-                quoteStringsAndCharacters: true, 
+                numberRadix: numberRadix,
+                includeCodePoints: false,
+                quoteStringsAndCharacters: true,
                 escapeNonPrintableCharacters: true,
                 cultureInfo: CultureInfo.InvariantCulture);
             var formatted = int.MinValue <= bound && bound <= int.MaxValue
@@ -274,10 +275,10 @@ namespace Microsoft.CodeAnalysis.Scripting.Hosting
         }
 
         private void AppendTypeInstantiation(
-            StringBuilder builder, 
-            TypeInfo typeInfo, 
-            Type[] genericArguments, 
-            ref int genericArgIndex, 
+            StringBuilder builder,
+            TypeInfo typeInfo,
+            Type[] genericArguments,
+            ref int genericArgIndex,
             CommonTypeNameFormatterOptions options)
         {
             // generic arguments of all the outer types and the current type;

@@ -1,16 +1,13 @@
 ﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis.Editor.Implementation.BraceMatching;
-using Microsoft.CodeAnalysis.Editor.Shared.Extensions;
-using Microsoft.CodeAnalysis.Editor.Shared.Tagging;
 using Microsoft.CodeAnalysis.Editor.Tagging;
 using Microsoft.CodeAnalysis.Editor.UnitTests.Workspaces;
 using Microsoft.CodeAnalysis.Shared.TestHooks;
+using Microsoft.CodeAnalysis.Test.Utilities;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.VisualStudio.Text;
 using Microsoft.VisualStudio.Text.Editor;
@@ -22,6 +19,7 @@ using Xunit;
 
 namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.BraceHighlighting
 {
+    [UseExportProvider]
     public class InteractiveBraceHighlightingTests
     {
         private IEnumerable<T> Enumerable<T>(params T[] array)
@@ -38,7 +36,7 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.BraceHighlighting
             var producer = new BraceHighlightingViewTaggerProvider(
                 workspace.GetService<IBraceMatchingService>(),
                 workspace.GetService<IForegroundNotificationService>(),
-                AggregateAsynchronousOperationListener.EmptyListeners);
+                AsynchronousOperationListenerProvider.NullProvider);
 
             var context = new TaggerContext<BraceHighlightTag>(
                 buffer.CurrentSnapshot.GetRelatedDocumentsWithChanges().FirstOrDefault(),
@@ -52,7 +50,7 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.BraceHighlighting
         public async Task TestCurlies()
         {
             var code = "public class C {\r\n}";
-            using (var workspace = await TestWorkspace.CreateCSharpAsync(code, parseOptions: Options.Script))
+            using (var workspace = TestWorkspace.CreateCSharp(code, parseOptions: Options.Script))
             {
                 var buffer = workspace.Documents.First().GetTextBuffer();
 
@@ -81,8 +79,8 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.BraceHighlighting
         [WpfFact, Trait(Traits.Feature, Traits.Features.BraceHighlighting)]
         public async Task TestTouchingItems()
         {
-            var code = "public class C {\r\n  public void Foo(){}\r\n}";
-            using (var workspace = await TestWorkspace.CreateCSharpAsync(code, Options.Script))
+            var code = "public class C {\r\n  public void Goo(){}\r\n}";
+            using (var workspace = TestWorkspace.CreateCSharp(code, Options.Script))
             {
                 var buffer = workspace.Documents.First().GetTextBuffer();
 
@@ -112,8 +110,8 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.BraceHighlighting
         [WpfFact, Trait(Traits.Feature, Traits.Features.BraceHighlighting)]
         public async Task TestAngles()
         {
-            var code = "/// <summary>Foo</summary>\r\npublic class C<T> {\r\n  void Foo() {\r\n    bool a = b < c;\r\n    bool d = e > f;\r\n  }\r\n} ";
-            using (var workspace = await TestWorkspace.CreateCSharpAsync(code, parseOptions: Options.Script))
+            var code = "/// <summary>Goo</summary>\r\npublic class C<T> {\r\n  void Goo() {\r\n    bool a = b < c;\r\n    bool d = e > f;\r\n  }\r\n} ";
+            using (var workspace = TestWorkspace.CreateCSharp(code, parseOptions: Options.Script))
             {
                 var buffer = workspace.Documents.First().GetTextBuffer();
 
@@ -125,14 +123,14 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.BraceHighlighting
                 result = await ProduceTagsAsync(workspace, buffer, 45);
                 Assert.True(result.Select(ts => ts.Span.Span).SetEquals(Enumerable(Span.FromBounds(42, 43), Span.FromBounds(44, 45))));
 
-                Func<int, char, Task> assertNoTags = async (position, expectedChar) =>
+                async Task assertNoTags(int position, char expectedChar)
                 {
                     Assert.Equal(expectedChar, buffer.CurrentSnapshot[position]);
                     result = await ProduceTagsAsync(workspace, buffer, position);
                     Assert.True(result.IsEmpty());
                     result = await ProduceTagsAsync(workspace, buffer, position + 1);
                     Assert.True(result.IsEmpty());
-                };
+                }
 
                 // Doesn't highlight angles of XML doc comments
                 var xmlTagStartPosition = 4;
@@ -171,7 +169,7 @@ class C
         }
     }
 } ";
-            using (var workspace = await TestWorkspace.CreateCSharpAsync(code, parseOptions: Options.Script))
+            using (var workspace = TestWorkspace.CreateCSharp(code, parseOptions: Options.Script))
             {
                 var buffer = workspace.Documents.First().GetTextBuffer();
 

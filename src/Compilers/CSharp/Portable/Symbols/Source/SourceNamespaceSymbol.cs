@@ -8,6 +8,7 @@ using System.Linq;
 using System.Threading;
 using Microsoft.CodeAnalysis.CSharp.Symbols;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.PooledObjects;
 using Microsoft.CodeAnalysis.Text;
 using Roslyn.Utilities;
 using Microsoft.CodeAnalysis;
@@ -32,11 +33,19 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
 
         private LexicalSortKey _lazyLexicalSortKey = LexicalSortKey.NotInitialized;
 
-        internal SourceNamespaceSymbol(SourceModuleSymbol module, Symbol container, MergedNamespaceDeclaration mergedDeclaration)
+        internal SourceNamespaceSymbol(
+            SourceModuleSymbol module, Symbol container,
+            MergedNamespaceDeclaration mergedDeclaration,
+            DiagnosticBag diagnostics)
         {
             _module = module;
             _container = container;
             _mergedDeclaration = mergedDeclaration;
+
+            foreach (var singleDeclaration in mergedDeclaration.Declarations)
+            {
+                diagnostics.AddRange(singleDeclaration.Diagnostics);
+            }
         }
 
         internal MergedNamespaceDeclaration MergedDeclaration
@@ -232,7 +241,8 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
 
                     // We may produce a SymbolDeclaredEvent for the enclosing namespace before events for its contained members
                     DeclaringCompilation.SymbolDeclaredEvent(this);
-                    _state.NotePartComplete(CompletionPart.NameToMembersMap);
+                    var wasSetThisThread = _state.NotePartComplete(CompletionPart.NameToMembersMap);
+                    Debug.Assert(wasSetThisThread);
                 }
 
                 diagnostics.Free();
@@ -248,7 +258,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                 // NOTE: This method depends on MakeNameToMembersMap() on creating a proper 
                 // NOTE: type of the array, see comments in MakeNameToMembersMap() for details
 
-                var dictionary = new Dictionary<String, ImmutableArray<NamedTypeSymbol>>();
+                var dictionary = new Dictionary<String, ImmutableArray<NamedTypeSymbol>>(StringOrdinalComparer.Instance);
 
                 Dictionary<String, ImmutableArray<NamespaceOrTypeSymbol>> map = this.GetNameToMembersMap();
                 foreach (var kvp in map)
@@ -364,8 +374,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
 
                     if ((object)other != null)
                     {
-                        if (nts is SourceNamedTypeSymbol && other is SourceNamedTypeSymbol &&
-                            (nts as SourceNamedTypeSymbol).IsPartial && (other as SourceNamedTypeSymbol).IsPartial)
+                        if ((nts as SourceNamedTypeSymbol)?.IsPartial == true && (other as SourceNamedTypeSymbol)?.IsPartial == true)
                         {
                             diagnostics.Add(ErrorCode.ERR_PartialTypeKindConflict, symbol.Locations[0], symbol);
                         }
@@ -381,7 +390,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                     {
                         //types declared at the namespace level may only have declared accessibility of public or internal (Section 3.5.1)
                         Accessibility declaredAccessibility = nts.DeclaredAccessibility;
-                        if ((declaredAccessibility & (Accessibility.Public | Accessibility.Internal)) != declaredAccessibility)
+                        if (declaredAccessibility != Accessibility.Public && declaredAccessibility != Accessibility.Internal)
                         {
                             diagnostics.Add(ErrorCode.ERR_NoNamespacePrivate, symbol.Locations[0]);
                         }
@@ -397,7 +406,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
             switch (declaration.Kind)
             {
                 case DeclarationKind.Namespace:
-                    return new SourceNamespaceSymbol(_module, this, (MergedNamespaceDeclaration)declaration);
+                    return new SourceNamespaceSymbol(_module, this, (MergedNamespaceDeclaration)declaration, diagnostics);
 
                 case DeclarationKind.Struct:
                 case DeclarationKind.Interface:
@@ -454,11 +463,12 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
             }
 
             // Check if any namespace declaration block intersects with the given tree/span.
-            foreach (var syntaxRef in this.DeclaringSyntaxReferences)
+            foreach (var declaration in _mergedDeclaration.Declarations)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                if (syntaxRef.SyntaxTree != tree)
+                var declarationSyntaxRef = declaration.SyntaxReference;
+                if (declarationSyntaxRef.SyntaxTree != tree)
                 {
                     continue;
                 }
@@ -468,7 +478,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                     return true;
                 }
 
-                var syntax = syntaxRef.GetSyntax(cancellationToken);
+                var syntax = NamespaceDeclarationSyntaxReference.GetSyntax(declarationSyntaxRef, cancellationToken);
                 if (syntax.FullSpan.IntersectsWith(definedWithinSpan.Value))
                 {
                     return true;
@@ -484,7 +494,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
 
             public NameToSymbolMapBuilder(int capacity)
             {
-                _dictionary = new Dictionary<string, object>(capacity);
+                _dictionary = new Dictionary<string, object>(capacity, StringOrdinalComparer.Instance);
             }
 
             public void Add(NamespaceOrTypeSymbol symbol)
@@ -510,7 +520,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
 
             public Dictionary<String, ImmutableArray<NamespaceOrTypeSymbol>> CreateMap()
             {
-                var result = new Dictionary<String, ImmutableArray<NamespaceOrTypeSymbol>>(_dictionary.Count);
+                var result = new Dictionary<String, ImmutableArray<NamespaceOrTypeSymbol>>(_dictionary.Count, StringOrdinalComparer.Instance);
 
                 foreach (var kvp in _dictionary)
                 {

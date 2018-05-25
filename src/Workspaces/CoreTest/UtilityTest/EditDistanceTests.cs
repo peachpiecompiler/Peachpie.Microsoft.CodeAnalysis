@@ -19,7 +19,7 @@ namespace Microsoft.CodeAnalysis.UnitTests
             // Edit distances are symmetric.
             var editDistance2 = EditDistance.GetEditDistance(t, s);
             Assert.Equal(editDistance1, editDistance2);
-            
+
             // If we set hte edit distance as our threshold, we should still find the value.
             var editDistance3 = EditDistance.GetEditDistance(s, t, editDistance1);
             Assert.Equal(editDistance1, editDistance3);
@@ -77,6 +77,7 @@ namespace Microsoft.CodeAnalysis.UnitTests
             VerifyEditDistance("XlmReade", "XmlReader", 2);
         }
 
+        [Fact]
         public void EditDistance5()
         {
             VerifyEditDistance("Zeil", "trials", 4);

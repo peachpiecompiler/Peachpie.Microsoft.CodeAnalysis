@@ -2,6 +2,7 @@
 
 using Microsoft.CodeAnalysis.CSharp.Symbols;
 using Roslyn.Utilities;
+using System;
 using System.Collections.Immutable;
 using System.Diagnostics;
 
@@ -9,7 +10,7 @@ namespace Microsoft.CodeAnalysis.CSharp
 {
     /// <summary>
     /// Some error messages are particularly confusing if multiple placeholders are substituted
-    /// with the same string.  For example, "cannot convert from 'Foo' to 'Foo'".  Usually, this
+    /// with the same string.  For example, "cannot convert from 'Goo' to 'Goo'".  Usually, this
     /// occurs because there are two types in different contexts with the same qualified name.
     /// The solution is to provide additional qualification on each symbol - either a source
     /// location, an assembly path, or an assembly identity.
@@ -36,12 +37,12 @@ namespace Microsoft.CodeAnalysis.CSharp
             _symbol1 = symbol1;
         }
 
-        public IMessageSerializable First
+        public IFormattable First
         {
             get { return new Description(this, 0); }
         }
 
-        public IMessageSerializable Second
+        public IFormattable Second
         {
             get { return new Description(this, 1); }
         }
@@ -103,27 +104,28 @@ namespace Microsoft.CodeAnalysis.CSharp
                     // May not be the case if there are error types.
                     if ((object)containingAssembly0 != null && (object)containingAssembly1 != null)
                     {
+                        // Use the assembly identities rather than locations. Note that the
+                        // assembly identities may be identical as well. (For instance, the
+                        // symbols are type arguments to the same generic type, and the type
+                        // arguments have the same string representation. The assembly
+                        // identities will refer to the generic types, not the type arguments.)
                         location0 = containingAssembly0.Identity.ToString();
                         location1 = containingAssembly1.Identity.ToString();
-
-                        // Even if the friendly locations produced by GetLocationString aren't
-                        // distinct, the containing assembly identities should be.
-                        Debug.Assert(location0 != location1);
                     }
                 }
 
-                if (location0 != null)
+                if (location0 != location1)
                 {
-                    description0 = $"{description0} [{location0}]";
-                }
-
-                if (location1 != null)
-                {
-                    description1 = $"{description1} [{location1}]";
+                    if (location0 != null)
+                    {
+                        description0 = $"{description0} [{location0}]";
+                    }
+                    if (location1 != null)
+                    {
+                        description1 = $"{description1} [{location1}]";
+                    }
                 }
             }
-
-            Debug.Assert(description0 != description1);
 
             if (!_lazyDescriptions.IsDefault) return;
 
@@ -196,7 +198,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             return _lazyDescriptions[index];
         }
 
-        private sealed class Description : IMessageSerializable
+        private sealed class Description : IFormattable
         {
             private readonly SymbolDistinguisher _distinguisher;
             private readonly int _index;
@@ -222,14 +224,23 @@ namespace Microsoft.CodeAnalysis.CSharp
 
             public override int GetHashCode()
             {
-                return Hash.Combine(
-                    _distinguisher._compilation.GetHashCode(),
-                    GetSymbol().GetHashCode());
+                int result = GetSymbol().GetHashCode();
+                var compilation = _distinguisher._compilation;
+                if (compilation != null)
+                {
+                    result = Hash.Combine(result, compilation.GetHashCode());
+                }
+                return result;
             }
 
             public override string ToString()
             {
                 return _distinguisher.GetDescription(_index);
+            }
+
+            string IFormattable.ToString(string format, IFormatProvider formatProvider)
+            {
+                return ToString();
             }
         }
     }

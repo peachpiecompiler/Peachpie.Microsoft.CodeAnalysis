@@ -2,7 +2,6 @@
 
 Imports System.Collections.Immutable
 Imports System.Reflection.Metadata
-Imports System.Reflection.Metadata.Ecma335
 Imports System.Runtime.InteropServices
 Imports Microsoft.CodeAnalysis.CodeGen
 Imports Microsoft.CodeAnalysis.Emit
@@ -31,6 +30,16 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Emit
             Debug.Assert(metadataDecoder IsNot Nothing)
             Me._metadataDecoder = metadataDecoder
         End Sub
+
+        Friend Overrides ReadOnly Property MessageProvider As CommonMessageProvider
+            Get
+                Return VisualBasic.MessageProvider.Instance
+            End Get
+        End Property
+
+        Protected Overrides Function GetLambdaSyntaxFacts() As LambdaSyntaxFacts
+            Return VisualBasicLambdaSyntaxFacts.Instance
+        End Function
 
         Friend Function TryGetAnonymousTypeName(template As NamedTypeSymbol, <Out> ByRef name As String, <Out> ByRef index As Integer) As Boolean
             Return Me.mapToPrevious.TryGetAnonymousTypeName(template, name, index)
@@ -159,14 +168,12 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Emit
             awaiterSlotCount = maxAwaiterSlotIndex + 1
         End Sub
 
-        Protected Overrides Function TryGetLocalSlotMapFromMetadata(handle As MethodDefinitionHandle, debugInfo As EditAndContinueMethodDebugInformation) As ImmutableArray(Of EncLocalInfo)
-            Dim slotMetadata As ImmutableArray(Of LocalInfo(Of TypeSymbol)) = Nothing
-            If Not _metadataDecoder.TryGetLocals(handle, slotMetadata) Then
-                Return Nothing
-            End If
+        Protected Overrides Function GetLocalSlotMapFromMetadata(handle As StandaloneSignatureHandle, debugInfo As EditAndContinueMethodDebugInformation) As ImmutableArray(Of EncLocalInfo)
+            Debug.Assert(Not handle.IsNil)
 
-            Dim result = CreateLocalSlotMap(debugInfo, slotMetadata)
-            Debug.Assert(result.Length = slotMetadata.Length)
+            Dim localInfos = _metadataDecoder.GetLocalsOrThrow(handle)
+            Dim result = CreateLocalSlotMap(debugInfo, localInfos)
+            Debug.Assert(result.Length = localInfos.Length)
             Return result
         End Function
 

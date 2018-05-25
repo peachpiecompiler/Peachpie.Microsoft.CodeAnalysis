@@ -2,7 +2,7 @@
 
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis.Editor.CSharp.KeywordHighlighting.KeywordHighlighters;
-using Roslyn.Test.Utilities;
+using Microsoft.CodeAnalysis.Test.Utilities;
 using Xunit;
 
 namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.KeywordHighlighting
@@ -18,17 +18,22 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.KeywordHighlighting
         public async Task TestExample1_1()
         {
             await TestAsync(
-        @"class Account {
+@"class Account
+{
     object lockObj = new object();
     int balance;
 
-    int Withdraw(int amount) {
-        {|Cursor:[|lock|]|} (lockObj) {
-            if (balance >= amount) {
+    int Withdraw(int amount)
+    {
+        {|Cursor:[|lock|]|} (lockObj)
+        {
+            if (balance >= amount)
+            {
                 balance = balance – amount;
                 return amount;
             }
-            else {
+            else
+            {
                 return -1;
             }
         }

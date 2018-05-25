@@ -111,11 +111,10 @@ namespace Microsoft.CodeAnalysis.CSharp.Extensions
                 return conversion;
             }
 
-            bool discarded;
-            var speculatedExpressionOuterType = GetOuterCastType(speculatedExpression, speculationAnalyzer.SpeculativeSemanticModel, out discarded) ?? typeInfo.ConvertedType;
+            var speculatedExpressionOuterType = GetOuterCastType(speculatedExpression, speculationAnalyzer.SpeculativeSemanticModel, out var discarded) ?? typeInfo.ConvertedType;
             if (speculatedExpressionOuterType == null)
             {
-                return default(Conversion);
+                return default;
             }
 
             return speculationAnalyzer.SpeculativeSemanticModel.ClassifyConversion(speculatedExpression, speculatedExpressionOuterType);
@@ -145,61 +144,79 @@ namespace Microsoft.CodeAnalysis.CSharp.Extensions
             SemanticModel semanticModel,
             CancellationToken cancellationToken)
         {
-            // Special case: When a null literal is cast and passed as the single argument to a params parameter,
+            // When a casted value is passed as the single argument to a params parameter,
             // we can only remove the cast if it is implicitly convertible to the parameter's type,
             // but not the parameter's element type. Otherwise, we could end up changing the invocation
-            // to pass a null array rather than an array with a null single element.
+            // to pass an array rather than an array with a single element.
             //
             // IOW, given the following method...
             //
-            // static void Foo(params object[] x) { }
+            // static void Goo(params object[] x) { }
             //
             // ...we should remove this cast...
             //
-            // Foo((object[])null);
+            // Goo((object[])null);
             //
             // ...but not this cast...
             //
-            // Foo((object)null);
-
-            if (cast.Expression.WalkDownParentheses().IsKind(SyntaxKind.NullLiteralExpression))
+            // Goo((object)null);
+            var parent = cast.WalkUpParentheses().Parent;
+            if (parent is ArgumentSyntax argument)
             {
-                var argument = cast.WalkUpParentheses().Parent as ArgumentSyntax;
-                if (argument != null)
+                // If there are any arguments to the right, we can assume that this is not a
+                // *single* argument passed to a params parameter.
+                if (argument.Parent is BaseArgumentListSyntax argumentList)
                 {
-                    // If there are any arguments to the right, we can assume that this is not a
-                    // *single* argument passed to a params parameter.
-                    var argumentList = argument.Parent as BaseArgumentListSyntax;
-                    if (argumentList != null)
+                    var argumentIndex = argumentList.Arguments.IndexOf(argument);
+                    if (argumentIndex < argumentList.Arguments.Count - 1)
                     {
-                        var argumentIndex = argumentList.Arguments.IndexOf(argument);
-                        if (argumentIndex < argumentList.Arguments.Count - 1)
-                        {
-                            return false;
-                        }
+                        return false;
                     }
+                }
 
-                    var parameter = argument.DetermineParameter(semanticModel, cancellationToken: cancellationToken);
-                    if (parameter != null && parameter.IsParams)
-                    {
-                        Debug.Assert(parameter.Type is IArrayTypeSymbol);
+                var parameter = argument.DetermineParameter(semanticModel, cancellationToken: cancellationToken);
+                return ParameterTypeMatchesParamsElementType(parameter, castType, semanticModel);
+            }
 
-                        var parameterType = (IArrayTypeSymbol)parameter.Type;
+            if (parent is AttributeArgumentSyntax attributeArgument)
+            {
+                if (attributeArgument.Parent is AttributeArgumentListSyntax attributeArgumentList)
+                {
+                    // We don't check the position of the argument because in attributes it is allowed that 
+                    // params parameter are positioned in between if named arguments are used.
+                    // The *single* argument check above is also broken: https://github.com/dotnet/roslyn/issues/20742
+                    var parameter = attributeArgument.DetermineParameter(semanticModel, cancellationToken: cancellationToken);
+                    return ParameterTypeMatchesParamsElementType(parameter, castType, semanticModel);
+                }
+            }
 
-                        var conversion = semanticModel.Compilation.ClassifyConversion(castType, parameterType);
-                        if (conversion.Exists &&
-                            conversion.IsImplicit)
-                        {
-                            return false;
-                        }
+            return false;
+        }
 
-                        var conversionElementType = semanticModel.Compilation.ClassifyConversion(castType, parameterType.ElementType);
-                        if (conversionElementType.Exists &&
-                            conversionElementType.IsImplicit)
-                        {
-                            return true;
-                        }
-                    }
+        private static bool ParameterTypeMatchesParamsElementType(IParameterSymbol parameter, ITypeSymbol castType, SemanticModel semanticModel)
+        {
+            if (parameter?.IsParams == true)
+            {
+                // if the method is defined with errors: void M(params int wrongDefined), paramter.IsParams == true but paramter.Type is not an array.
+                // In such cases is better to be conservative and opt out.
+                var parameterType = parameter.Type as IArrayTypeSymbol;
+                if (parameterType == null)
+                {
+                    return true;
+                }
+
+                var conversion = semanticModel.Compilation.ClassifyConversion(castType, parameterType);
+                if (conversion.Exists &&
+                    conversion.IsImplicit)
+                {
+                    return false;
+                }
+
+                var conversionElementType = semanticModel.Compilation.ClassifyConversion(castType, parameterType.ElementType);
+                if (conversionElementType.Exists &&
+                    conversionElementType.IsImplicit)
+                {
+                    return true;
                 }
             }
 
@@ -210,6 +227,18 @@ namespace Microsoft.CodeAnalysis.CSharp.Extensions
         {
             if (cast.WalkUpParentheses().IsParentKind(SyntaxKind.PointerIndirectionExpression) &&
                 cast.Expression.WalkDownParentheses().IsKind(SyntaxKind.NullLiteralExpression))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool EnumCastDefinitelyCantBeRemoved(CastExpressionSyntax cast, ITypeSymbol expressionType)
+        {
+            if (expressionType != null
+                && expressionType.IsEnumType()
+                && cast.WalkUpParentheses().IsParentKind(SyntaxKind.UnaryMinusExpression, SyntaxKind.UnaryPlusExpression))
             {
                 return true;
             }
@@ -316,6 +345,11 @@ namespace Microsoft.CodeAnalysis.CSharp.Extensions
             var expressionTypeInfo = semanticModel.GetTypeInfo(cast.Expression, cancellationToken);
             var expressionType = expressionTypeInfo.Type;
 
+            if (EnumCastDefinitelyCantBeRemoved(cast, expressionType))
+            {
+                return false;
+            }
+
             // We do not remove any cast on 
             // 1. Dynamic Expressions
             // 2. If there is any other argument which is dynamic
@@ -354,20 +388,23 @@ namespace Microsoft.CodeAnalysis.CSharp.Extensions
             }
 
             var expressionToCastType = semanticModel.ClassifyConversion(cast.SpanStart, cast.Expression, castType, isExplicitInSource: true);
-
-            bool parentIsOrAsExpression;
-            var outerType = GetOuterCastType(cast, semanticModel, out parentIsOrAsExpression) ?? castTypeInfo.ConvertedType;
+            var outerType = GetOuterCastType(cast, semanticModel, out var parentIsOrAsExpression) ?? castTypeInfo.ConvertedType;
 
             // Simple case: If the conversion from the inner expression to the cast type is identity,
             // the cast can be removed.
             if (expressionToCastType.IsIdentity)
             {
+                // Simple case: Is this an identity cast to another cast? If so, we're safe to remove it.
+                if (cast.Expression.WalkDownParentheses().IsKind(SyntaxKind.CastExpression))
+                {
+                    return true;
+                }
+
                 // Required explicit cast for reference comparison.
                 // Cast removal causes warning CS0252 (Possible unintended reference comparison).
                 //      object x = string.Intern("Hi!");
                 //      (object)x == "Hi!"
-                ExpressionSyntax other;
-                if (IsRequiredCastForReferenceEqualityComparison(outerType, cast, semanticModel, out other))
+                if (IsRequiredCastForReferenceEqualityComparison(outerType, cast, semanticModel, out var other))
                 {
                     var otherToOuterType = semanticModel.ClassifyConversion(other, outerType);
                     if (otherToOuterType.IsImplicit && otherToOuterType.IsReference)
@@ -381,6 +418,11 @@ namespace Microsoft.CodeAnalysis.CSharp.Extensions
             else if (expressionToCastType.IsExplicit && expressionToCastType.IsReference)
             {
                 // Explicit reference conversions can cause an exception or data loss, hence can never be removed.
+                return false;
+            }
+            else if (expressionToCastType.IsExplicit && expressionToCastType.IsUnboxing)
+            {
+                // Unboxing conversions can cause a null ref exception, hence can never be removed.
                 return false;
             }
             else if (expressionToCastType.IsExplicit && expressionToCastType.IsNumeric)
@@ -435,15 +477,13 @@ namespace Microsoft.CodeAnalysis.CSharp.Extensions
                 {
                     return false;
                 }
-
                 // Required explicit cast for reference comparison.
                 // Cast removal causes warning CS0252 (Possible unintended reference comparison).
                 //      object x = string.Intern("Hi!");
                 //      x == (object)"Hi!"
-                ExpressionSyntax other;
                 if (expressionToCastType.IsImplicit && expressionToCastType.IsReference &&
                     castToOuterType.IsIdentity &&
-                    IsRequiredCastForReferenceEqualityComparison(outerType, cast, semanticModel, out other))
+                    IsRequiredCastForReferenceEqualityComparison(outerType, cast, semanticModel, out var other))
                 {
                     return false;
                 }

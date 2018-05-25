@@ -7,6 +7,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
+using Microsoft.CodeAnalysis.PooledObjects;
 using Roslyn.Utilities;
 
 namespace Microsoft.CodeAnalysis.Text
@@ -195,7 +196,7 @@ namespace Microsoft.CodeAnalysis.Text
 
         /// <summary>
         /// Reduces the number of segments toward the target number of segments,
-        /// if the number of regments is deemed to be too large (beyond the maximum).
+        /// if the number of segments is deemed to be too large (beyond the maximum).
         /// </summary>
         private static void ReduceSegmentCountIfNecessary(ArrayBuilder<SourceText> segments)
         {
@@ -212,7 +213,7 @@ namespace Microsoft.CodeAnalysis.Text
 
         // Segments must be less than (or equal) to this size to be combined with other segments.
         // This is some arbitrary number that is a fraction of max int.
-        private const int MAXIMUM_SEGMENT_SIZE_FOR_COMBINING = int.MaxValue / 16; 
+        private const int MAXIMUM_SEGMENT_SIZE_FOR_COMBINING = int.MaxValue / 16;
 
         /// <summary>
         /// Determines the segment size to use for call to CombineSegments, that will result in the segment count

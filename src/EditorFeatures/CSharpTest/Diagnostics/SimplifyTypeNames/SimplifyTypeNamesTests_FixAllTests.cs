@@ -1,10 +1,11 @@
 ﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System.Threading.Tasks;
+using Microsoft.CodeAnalysis.CodeStyle;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.CodeFixes.SimplifyTypeNames;
-using Microsoft.CodeAnalysis.CSharp.Diagnostics.SimplifyTypeNames;
 using Microsoft.CodeAnalysis.Diagnostics;
-using Roslyn.Test.Utilities;
+using Microsoft.CodeAnalysis.Test.Utilities;
 using Xunit;
 
 namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.Diagnostics.SimplifyTypeNames
@@ -120,7 +121,7 @@ class Program2
     </Project>
 </Workspace>";
 
-            await TestAsync(input, expected, compareTokens: false, fixAllActionEquivalenceKey: fixAllActionId);
+            await TestInRegularAndScriptAsync(input, expected, options: PreferIntrinsicTypeEverywhere, fixAllActionEquivalenceKey: fixAllActionId);
         }
 
         [Fact]
@@ -230,7 +231,7 @@ class Program2
     </Project>
 </Workspace>";
 
-            await TestAsync(input, expected, compareTokens: false, fixAllActionEquivalenceKey: fixAllActionId);
+            await TestInRegularAndScriptAsync(input, expected, options: PreferIntrinsicTypeEverywhere, fixAllActionEquivalenceKey: fixAllActionId);
         }
 
         [Fact]
@@ -340,7 +341,7 @@ class Program2
     </Project>
 </Workspace>";
 
-            await TestAsync(input, expected, compareTokens: false, fixAllActionEquivalenceKey: fixAllActionId);
+            await TestInRegularAndScriptAsync(input, expected, options:PreferIntrinsicTypeEverywhere, fixAllActionEquivalenceKey: fixAllActionId);
         }
 
         [Fact]
@@ -348,7 +349,7 @@ class Program2
         [Trait(Traits.Feature, Traits.Features.CodeActionsFixAllOccurrences)]
         public async Task TestFixAllInSolution_RemoveThis()
         {
-            var fixAllActionId = SimplifyTypeNamesCodeFixProvider.GetCodeActionId(IDEDiagnosticIds.SimplifyThisOrMeDiagnosticId, null);
+            var fixAllActionId = SimplifyTypeNamesCodeFixProvider.GetCodeActionId(IDEDiagnosticIds.RemoveQualificationDiagnosticId, null);
 
             var input = @"
 <Workspace>
@@ -594,7 +595,7 @@ class ProgramB3
     </Project>
 </Workspace>";
 
-            await TestAsync(input, expected, compareTokens: false, fixAllActionEquivalenceKey: fixAllActionId);
+            await TestInRegularAndScriptAsync(input, expected, fixAllActionEquivalenceKey: fixAllActionId);
         }
 
         [Fact]
@@ -848,7 +849,95 @@ class ProgramB3
     </Project>
 </Workspace>";
 
-            await TestAsync(input, expected, compareTokens: false, fixAllActionEquivalenceKey: fixAllActionId);
+            await TestInRegularAndScriptAsync(input, expected, fixAllActionEquivalenceKey: fixAllActionId);
+        }
+
+        [Fact]
+        [Trait(Traits.Feature, Traits.Features.CodeActionsQualifyMemberAccess)]
+        [Trait(Traits.Feature, Traits.Features.CodeActionsFixAllOccurrences)]
+        public async Task TestFixAllInSolution_RemoveMemberAccessQualification()
+        {
+            var input = @"
+<Workspace>
+    <Project Language=""C#"" AssemblyName=""Assembly1"" CommonReferences=""true"">
+        <Document>
+using System;
+
+class C
+{
+    int Property { get; set; }
+    int OtherProperty { get; set; }
+
+    void M()
+    {
+        {|FixAllInSolution:this.Property|} = 1;
+        var x = this.OtherProperty;
+    }
+}
+        </Document>
+        <Document>
+using System;
+
+class D
+{
+    string StringProperty { get; set; }
+    int field;
+
+    void N()
+    {
+        this.StringProperty = string.Empty;
+        this.field = 0; // ensure qualification isn't removed
+    }
+}
+        </Document>
+    </Project>
+</Workspace>";
+
+            var expected = @"
+<Workspace>
+    <Project Language=""C#"" AssemblyName=""Assembly1"" CommonReferences=""true"">
+        <Document>
+using System;
+
+class C
+{
+    int Property { get; set; }
+    int OtherProperty { get; set; }
+
+    void M()
+    {
+        Property = 1;
+        var x = OtherProperty;
+    }
+}
+        </Document>
+        <Document>
+using System;
+
+class D
+{
+    string StringProperty { get; set; }
+    int field;
+
+    void N()
+    {
+        StringProperty = string.Empty;
+        this.field = 0; // ensure qualification isn't removed
+    }
+}
+        </Document>
+    </Project>
+</Workspace>";
+
+            var options = OptionsSet(
+                SingleOption(CodeStyleOptions.QualifyPropertyAccess, false, NotificationOption.Suggestion),
+                SingleOption(CodeStyleOptions.QualifyFieldAccess, true, NotificationOption.Suggestion));
+
+            await TestInRegularAndScriptAsync(
+                initialMarkup: input,
+                expectedMarkup: expected,
+                options: options,
+                fixAllActionEquivalenceKey: CSharpFeaturesResources.Remove_this_qualification);
         }
 
         #endregion

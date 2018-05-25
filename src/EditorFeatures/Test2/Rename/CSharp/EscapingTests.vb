@@ -1,19 +1,26 @@
-' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 Imports Microsoft.CodeAnalysis.Rename.ConflictEngine
 
 Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Rename.CSharp
+    <[UseExportProvider]>
     Public Class EscapingTests
+        Private ReadOnly _outputHelper As Abstractions.ITestOutputHelper
+
+        Public Sub New(outputHelper As Abstractions.ITestOutputHelper)
+            _outputHelper = outputHelper
+        End Sub
+
         <Fact>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub EscapeWhenRenamingToEscapedKeyword1()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                 <Workspace>
                     <Project Language="C#" CommonReferences="true">
                         <Document>
-class [|$$Foo|]
+class [|$$Goo|]
 {
-    [|Foo|] foo;
+    [|Goo|] goo;
 }
                             </Document>
                     </Project>
@@ -25,13 +32,13 @@ class [|$$Foo|]
         <Fact>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub EscapeWhenRenamingToEscapedKeyword2()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                 <Workspace>
                     <Project Language="C#" CommonReferences="true">
                         <Document>
-class {|escaped:$$Foo|}
+class {|escaped:$$Goo|}
 {
-    {|escaped:Foo|} foo;
+    {|escaped:Goo|} goo;
 }
                             </Document>
                     </Project>
@@ -44,7 +51,7 @@ class {|escaped:$$Foo|}
         <Fact>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub UseFullAttributeNameWhenShortNameIsKeyword()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                 <Workspace>
                     <Project Language="C#" CommonReferences="true">
                         <Document>
@@ -70,7 +77,7 @@ class [|$$MainAttribute|] : System.Attribute
         <Fact>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub EscapeAttributeIfKeyword()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                 <Workspace>
                     <Project Language="C#" CommonReferences="true">
                         <Document>
@@ -97,13 +104,13 @@ class {|escaped:$$MainAttribute|} : System.Attribute
         <Fact>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub DoNotStickTokensTogetherForRefParameter_1()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                 <Workspace>
                     <Project Language="C#" CommonReferences="true">
                         <Document>
                             class[|$$@class|]
                             {
-                              static void Foo(ref{|escaped:@class|}@c) { }
+                              static void Goo(ref{|escaped:@class|}@c) { }
                             }
                             </Document>
                     </Project>
@@ -117,13 +124,13 @@ class {|escaped:$$MainAttribute|} : System.Attribute
         <Fact>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub DoNotStickTokensTogetherForRefParameter_2()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                 <Workspace>
                     <Project Language="C#" CommonReferences="true">
                         <Document>
                             class{|escaped:$$@class|}
                             {
-                              static void Foo(ref{|escaped:@class|}@c) { }
+                              static void Goo(ref{|escaped:@class|}@c) { }
                             }
                             </Document>
                     </Project>
@@ -136,13 +143,13 @@ class {|escaped:$$MainAttribute|} : System.Attribute
         <Fact>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub RenameEscapedIdentifierUnescapes()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                 <Workspace>
                     <Project Language="C#" CommonReferences="true">
                         <Document>
                             class A
                             {
-                                static void Foo() 
+                                static void Goo() 
                                 { 
                                     var [|$$@a|] = 12;
                                 }
@@ -157,13 +164,13 @@ class {|escaped:$$MainAttribute|} : System.Attribute
         <Fact>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub RenameEscapedIdentifierUnescapes_2()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                 <Workspace>
                     <Project Language="C#" CommonReferences="true">
                         <Document>
                             class A
                             {
-                                static void Foo() 
+                                static void Goo() 
                                 { 
                                     var {|stmt1:$$@a|} = 12;
                                 }
@@ -179,7 +186,7 @@ class {|escaped:$$MainAttribute|} : System.Attribute
         <Fact>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub RenameEscapedIdentifierUnescapes_3()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                 <Workspace>
                     <Project Language="C#" CommonReferences="true">
                         <Document>
@@ -192,7 +199,7 @@ class {|escaped:$$MainAttribute|} : System.Attribute
 
                             class A
                             {
-                                static void Foo() 
+                                static void Goo() 
                                 { 
                                     var x = new @B.{|stmt1:$$@C|}();
                                 }

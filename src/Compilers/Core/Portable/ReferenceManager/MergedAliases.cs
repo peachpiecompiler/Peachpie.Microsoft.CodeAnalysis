@@ -2,6 +2,7 @@
 
 using System.Collections.Immutable;
 using System.Diagnostics;
+using Microsoft.CodeAnalysis.PooledObjects;
 
 namespace Microsoft.CodeAnalysis
 {
@@ -49,7 +50,7 @@ namespace Microsoft.CodeAnalysis
             }
 
             Merge(
-                aliases: reference.Properties.HasRecursiveAliases ? RecursiveAliasesOpt : AliasesOpt, 
+                aliases: reference.Properties.HasRecursiveAliases ? RecursiveAliasesOpt : AliasesOpt,
                 newAliases: reference.Properties.Aliases);
         }
 

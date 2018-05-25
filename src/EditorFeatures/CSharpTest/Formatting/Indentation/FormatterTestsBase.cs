@@ -5,9 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.Editor.Commands;
 using Microsoft.CodeAnalysis.Editor.CSharp.Formatting.Indentation;
 using Microsoft.CodeAnalysis.Editor.Implementation.SmartIndent;
 using Microsoft.CodeAnalysis.Editor.UnitTests.Utilities;
@@ -15,10 +13,12 @@ using Microsoft.CodeAnalysis.Editor.UnitTests.Workspaces;
 using Microsoft.CodeAnalysis.Formatting;
 using Microsoft.CodeAnalysis.Formatting.Rules;
 using Microsoft.CodeAnalysis.Shared.Extensions;
+using Microsoft.CodeAnalysis.Test.Utilities;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.CodeAnalysis.Text.Shared.Extensions;
 using Microsoft.VisualStudio.Text;
 using Microsoft.VisualStudio.Text.Editor;
+using Microsoft.VisualStudio.Text.Editor.Commanding.Commands;
 using Microsoft.VisualStudio.Text.Operations;
 using Microsoft.VisualStudio.Text.Projection;
 using Moq;
@@ -26,6 +26,7 @@ using Xunit;
 
 namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.Formatting.Indentation
 {
+    [UseExportProvider]
     public class FormatterTestsBase
     {
         protected const string HtmlMarkup = @"<html>
@@ -75,7 +76,8 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.Formatting.Indentation
 
             var rules = formattingRuleProvider.CreateRule(document, position).Concat(Formatter.GetDefaultFormattingRules(document));
 
-            var formatter = new SmartTokenFormatter(workspace.Options, rules, root);
+            var documentOptions = await document.GetOptionsAsync();
+            var formatter = new SmartTokenFormatter(documentOptions, rules, root);
             var changes = await formatter.FormatTokenAsync(workspace, token, CancellationToken.None);
 
             ApplyChanges(buffer, changes);
@@ -102,7 +104,7 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.Formatting.Indentation
             TextSpan span = default(TextSpan))
         {
             // create tree service
-            using (var workspace = await TestWorkspace.CreateCSharpAsync(code))
+            using (var workspace = TestWorkspace.CreateCSharp(code))
             {
                 if (baseIndentation.HasValue)
                 {
@@ -118,7 +120,7 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.Formatting.Indentation
             }
         }
 
-        internal static async Task TestIndentationAsync(int point, int? expectedIndentation, ITextView textView, TestHostDocument subjectDocument)
+        internal static void TestIndentation(int point, int? expectedIndentation, ITextView textView, TestHostDocument subjectDocument)
         {
             var textUndoHistory = new Mock<ITextUndoHistoryRegistry>();
             var editorOperationsFactory = new Mock<IEditorOperationsFactoryService>();
@@ -129,7 +131,7 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.Formatting.Indentation
             var indentationLineFromBuffer = snapshot.GetLineFromPosition(point);
 
             var commandHandler = new SmartTokenFormatterCommandHandler(textUndoHistory.Object, editorOperationsFactory.Object);
-            commandHandler.ExecuteCommand(new ReturnKeyCommandArgs(textView, subjectDocument.TextBuffer), () => { });
+            commandHandler.ExecuteCommand(new ReturnKeyCommandArgs(textView, subjectDocument.TextBuffer), () => { }, TestCommandExecutionContext.Create());
             var newSnapshot = subjectDocument.TextBuffer.CurrentSnapshot;
 
             int? actualIndentation;
@@ -140,13 +142,13 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.Formatting.Indentation
             else
             {
                 var provider = new SmartIndent(textView);
-                actualIndentation = await provider.GetDesiredIndentationAsync(indentationLineFromBuffer);
+                actualIndentation = provider.GetDesiredIndentation(indentationLineFromBuffer);
             }
 
             Assert.Equal(expectedIndentation, actualIndentation.Value);
         }
 
-        public static async Task TestIndentationAsync(int indentationLine, int? expectedIndentation, TestWorkspace workspace)
+        public static void TestIndentation(int indentationLine, int? expectedIndentation, TestWorkspace workspace)
         {
             var snapshot = workspace.Documents.First().TextBuffer.CurrentSnapshot;
             var bufferGraph = new Mock<IBufferGraph>(MockBehavior.Strict);
@@ -156,10 +158,8 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.Formatting.Indentation
                                                      It.IsAny<ITextSnapshot>()))
                 .Returns<SnapshotPoint, PointTrackingMode, PositionAffinity, ITextSnapshot>((p, m, a, s) =>
                 {
-                    var factory = workspace.Services.GetService<IHostDependentFormattingRuleFactoryService>()
-                                    as TestFormattingRuleFactoryServiceFactory.Factory;
 
-                    if (factory != null && factory.BaseIndentation != 0 && factory.TextSpan.Contains(p.Position))
+                    if (workspace.Services.GetService<IHostDependentFormattingRuleFactoryService>() is TestFormattingRuleFactoryServiceFactory.Factory factory && factory.BaseIndentation != 0 && factory.TextSpan.Contains(p.Position))
                     {
                         var line = p.GetContainingLine();
                         var projectedOffset = line.GetFirstNonWhitespaceOffset().Value - factory.BaseIndentation;
@@ -180,7 +180,7 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.Formatting.Indentation
             var provider = new SmartIndent(textView.Object);
 
             var indentationLineFromBuffer = snapshot.GetLineFromLineNumber(indentationLine);
-            var actualIndentation = await provider.GetDesiredIndentationAsync(indentationLineFromBuffer);
+            var actualIndentation = provider.GetDesiredIndentation(indentationLineFromBuffer);
 
             Assert.Equal(expectedIndentation, actualIndentation);
         }

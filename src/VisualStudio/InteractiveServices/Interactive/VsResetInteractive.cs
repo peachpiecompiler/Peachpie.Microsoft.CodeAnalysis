@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 extern alias core;
 
@@ -16,6 +16,11 @@ using Microsoft.VisualStudio.Shell.Interop;
 using VSLangProj;
 using Project = EnvDTE.Project;
 using System.Collections.Immutable;
+using Microsoft.VisualStudio.Text.Editor;
+using Microsoft.VisualStudio.InteractiveWindow;
+using Microsoft.CodeAnalysis.Text;
+using System.Linq;
+using core::Microsoft.CodeAnalysis.Shared.Extensions;
 
 namespace Microsoft.VisualStudio.LanguageServices.Interactive
 {
@@ -26,8 +31,14 @@ namespace Microsoft.VisualStudio.LanguageServices.Interactive
         private readonly IVsMonitorSelection _monitorSelection;
         private readonly IVsSolutionBuildManager _buildManager;
 
-        internal VsResetInteractive(DTE dte, IComponentModel componentModel, IVsMonitorSelection monitorSelection, IVsSolutionBuildManager buildManager, Func<string, string> createReference, Func<string, string> createImport)
-            : base(createReference, createImport)
+        internal VsResetInteractive(
+            DTE dte,
+            IComponentModel componentModel,
+            IVsMonitorSelection monitorSelection,
+            IVsSolutionBuildManager buildManager,
+            Func<string, string> createReference,
+            Func<string, string> createImport)
+            : base(componentModel.GetService<IEditorOptionsFactoryService>(), createReference, createImport)
         {
             _dte = dte;
             _componentModel = componentModel;
@@ -42,7 +53,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Interactive
             out ImmutableArray<string> references,
             out ImmutableArray<string> referenceSearchPaths,
             out ImmutableArray<string> sourceSearchPaths,
-            out ImmutableArray<string> namespacesToImport,
+            out ImmutableArray<string> projectNamespaces,
             out string projectDirectory)
         {
             var hierarchyPointer = default(IntPtr);
@@ -50,19 +61,17 @@ namespace Microsoft.VisualStudio.LanguageServices.Interactive
             references = ImmutableArray<string>.Empty;
             referenceSearchPaths = ImmutableArray<string>.Empty;
             sourceSearchPaths = ImmutableArray<string>.Empty;
-            namespacesToImport = ImmutableArray<string>.Empty;
+            projectNamespaces = ImmutableArray<string>.Empty;
             projectDirectory = null;
 
             try
             {
-                uint itemid;
-                IVsMultiItemSelect multiItemSelectPointer;
                 Marshal.ThrowExceptionForHR(_monitorSelection.GetCurrentSelection(
-                    out hierarchyPointer, out itemid, out multiItemSelectPointer, out selectionContainerPointer));
+                    out hierarchyPointer, out var itemid, out var multiItemSelectPointer, out selectionContainerPointer));
 
                 if (hierarchyPointer != IntPtr.Zero)
                 {
-                    GetProjectProperties(hierarchyPointer, out references, out referenceSearchPaths, out sourceSearchPaths, out namespacesToImport, out projectDirectory);
+                    GetProjectProperties(hierarchyPointer, out references, out referenceSearchPaths, out sourceSearchPaths, out projectNamespaces, out projectDirectory);
                     return true;
                 }
             }
@@ -80,13 +89,12 @@ namespace Microsoft.VisualStudio.LanguageServices.Interactive
             out ImmutableArray<string> references,
             out ImmutableArray<string> referenceSearchPaths,
             out ImmutableArray<string> sourceSearchPaths,
-            out ImmutableArray<string> namespacesToImport,
+            out ImmutableArray<string> projectNamespaces,
             out string projectDirectory)
         {
             var hierarchy = (IVsHierarchy)Marshal.GetObjectForIUnknown(hierarchyPointer);
-            object extensibilityObject;
             Marshal.ThrowExceptionForHR(
-                hierarchy.GetProperty((uint)VSConstants.VSITEMID.Root, (int)__VSHPROPID.VSHPROPID_ExtObject, out extensibilityObject));
+                hierarchy.GetProperty((uint)VSConstants.VSITEMID.Root, (int)__VSHPROPID.VSHPROPID_ExtObject, out var extensibilityObject));
 
             // TODO: Revert this back to using dynamic for web projects, since they have copies of these interfaces.
             var project = (Project)extensibilityObject;
@@ -136,7 +144,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Interactive
             references = referencesBuilder.ToImmutableArray();
             referenceSearchPaths = referenceSearchPathsBuilder.ToImmutableArray();
             sourceSearchPaths = sourceSearchPathsBuilder.ToImmutableArray();
-            namespacesToImport = namespacesToImportBuilder.ToImmutableArray();
+            projectNamespaces = namespacesToImportBuilder.ToImmutableArray();
         }
 
         private static string GetReferenceString(Reference reference)
@@ -251,6 +259,16 @@ namespace Microsoft.VisualStudio.LanguageServices.Interactive
         protected override IWaitIndicator GetWaitIndicator()
         {
             return _componentModel.GetService<IWaitIndicator>();
+        }
+
+        /// <summary>
+        /// Return namespaces that can be resolved in the latest interactive compilation.
+        /// </summary>
+        protected override async Task<IEnumerable<string>> GetNamespacesToImportAsync(IEnumerable<string> namespacesToImport, IInteractiveWindow interactiveWindow)
+        {
+            var document = interactiveWindow.CurrentLanguageBuffer.CurrentSnapshot.GetOpenDocumentInCurrentContextWithChanges();
+            var compilation = await document.Project.GetCompilationAsync().ConfigureAwait(true);
+            return namespacesToImport.Where(ns => compilation.GlobalNamespace.GetQualifiedNamespace(ns) != null);
         }
     }
 }

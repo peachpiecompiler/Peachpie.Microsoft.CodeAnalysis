@@ -16,7 +16,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             var origSawAwait = _sawAwait;
             _sawAwait = false;
 
-            var optimizing = this._compilation.Options.OptimizationLevel == OptimizationLevel.Release;
+            var optimizing = _compilation.Options.OptimizationLevel == OptimizationLevel.Release;
             ImmutableArray<BoundCatchBlock> catchBlocks =
                 // When optimizing and we have a try block without side-effects, we can discard the catch blocks.
                 (optimizing && !HasSideEffects(tryBlock)) ? ImmutableArray<BoundCatchBlock>.Empty
@@ -70,7 +70,6 @@ namespace Microsoft.CodeAnalysis.CSharp
                 default:
                     return true;
             }
-
         }
 
         public override BoundNode VisitCatchBlock(BoundCatchBlock node)
@@ -80,6 +79,11 @@ namespace Microsoft.CodeAnalysis.CSharp
                 return base.VisitCatchBlock(node);
             }
 
+            if (node.ExceptionFilterOpt.ConstantValue?.BooleanValue == false)
+            {
+                return null;
+            }
+
             BoundExpression rewrittenExceptionSourceOpt = (BoundExpression)this.Visit(node.ExceptionSourceOpt);
             BoundExpression rewrittenFilter = (BoundExpression)this.Visit(node.ExceptionFilterOpt);
             BoundBlock rewrittenBody = (BoundBlock)this.Visit(node.Body);
@@ -87,11 +91,16 @@ namespace Microsoft.CodeAnalysis.CSharp
 
             // EnC: We need to insert a hidden sequence point to handle function remapping in case 
             // the containing method is edited while methods invoked in the condition are being executed.
+            if (rewrittenFilter != null && !node.WasCompilerGenerated && this.Instrument)
+            {
+                rewrittenFilter = _instrumenter.InstrumentCatchClauseFilter(node, rewrittenFilter, _factory);
+            }
+
             return node.Update(
-                node.LocalOpt,
+                node.Locals,
                 rewrittenExceptionSourceOpt,
                 rewrittenExceptionTypeOpt,
-                AddConditionSequencePoint(rewrittenFilter, node),
+                rewrittenFilter,
                 rewrittenBody,
                 node.IsSynthesizedAsyncCatchAll);
         }

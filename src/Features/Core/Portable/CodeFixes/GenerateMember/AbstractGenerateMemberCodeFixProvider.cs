@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,7 +12,9 @@ using Roslyn.Utilities;
 
 namespace Microsoft.CodeAnalysis.CodeFixes.GenerateMember
 {
+#pragma warning disable RS1016 // Code fix providers should provide FixAll support. https://github.com/dotnet/roslyn/issues/23528
     internal abstract class AbstractGenerateMemberCodeFixProvider : CodeFixProvider
+#pragma warning restore RS1016 // Code fix providers should provide FixAll support.
     {
         public sealed override async Task RegisterCodeFixesAsync(CodeFixContext context)
         {
@@ -28,7 +31,7 @@ namespace Microsoft.CodeAnalysis.CodeFixes.GenerateMember
             foreach (var name in names)
             {
                 var codeActions = await GetCodeActionsAsync(context.Document, name, context.CancellationToken).ConfigureAwait(false);
-                if (codeActions == null || codeActions.IsEmpty())
+                if (codeActions.IsDefaultOrEmpty)
                 {
                     continue;
                 }
@@ -38,14 +41,14 @@ namespace Microsoft.CodeAnalysis.CodeFixes.GenerateMember
             }
         }
 
-        protected abstract Task<IEnumerable<CodeAction>> GetCodeActionsAsync(Document document, SyntaxNode node, CancellationToken cancellationToken);
+        protected abstract Task<ImmutableArray<CodeAction>> GetCodeActionsAsync(Document document, SyntaxNode node, CancellationToken cancellationToken);
 
         protected virtual SyntaxNode GetTargetNode(SyntaxNode node)
         {
             return node;
         }
 
-        protected virtual bool IsCandidate(SyntaxNode node, Diagnostic diagnostic)
+        protected virtual bool IsCandidate(SyntaxNode node, SyntaxToken token, Diagnostic diagnostic)
         {
             return false;
         }
@@ -58,7 +61,7 @@ namespace Microsoft.CodeAnalysis.CodeFixes.GenerateMember
                 yield break;
             }
 
-            var nodes = token.GetAncestors<SyntaxNode>().Where(n => IsCandidate(n, diagnostic));
+            var nodes = token.GetAncestors<SyntaxNode>().Where(n => IsCandidate(n, token, diagnostic));
             foreach (var node in nodes)
             {
                 var name = GetTargetNode(node);

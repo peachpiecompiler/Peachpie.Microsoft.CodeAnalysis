@@ -1,8 +1,9 @@
 ﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
-using System;
 using Microsoft.CodeAnalysis.CSharp.Test.Utilities;
+using Microsoft.CodeAnalysis.Test.Utilities;
 using Roslyn.Test.Utilities;
+using System;
 using Xunit;
 
 namespace Microsoft.CodeAnalysis.CSharp.UnitTests.CodeGen
@@ -162,7 +163,7 @@ class Program
         foreach (var i in new C(4).IE(5, 6)) Console.Write(i);
     }
 }";
-            var compilation = CompileAndVerify(source, expectedOutput: "12324565");
+            var compilation = CompileAndVerifyWithMscorlib40(source, expectedOutput: "12324565");
 
             compilation.VerifyIL("C.<IE>d__2<T>.System.Collections.Generic.IEnumerable<T>.GetEnumerator()", @"
 {
@@ -440,7 +441,7 @@ class Program
 ");
             compilation.VerifyIL("Program.<Int0>d__0.System.IDisposable.Dispose()", @"
 {
-  // Code size      121 (0x79)
+  // Code size       76 (0x4c)
   .maxstack  2
   .locals init (int V_0)
   IL_0000:  ldarg.0
@@ -449,70 +450,63 @@ class Program
   IL_0007:  ldloc.0
   IL_0008:  ldc.i4.s   -5
   IL_000a:  sub
-  IL_000b:  switch    (
-        IL_0041,
-        IL_0041,
-        IL_0041,
-        IL_0078,
-        IL_0078,
-        IL_0078,
-        IL_0078,
-        IL_0041,
-        IL_0041,
-        IL_0041,
-        IL_0041,
-        IL_0041)
-  IL_0040:  ret
-  IL_0041:  nop
+  IL_000b:  ldc.i4.2
+  IL_000c:  ble.un.s   IL_0014
+  IL_000e:  ldloc.0
+  IL_000f:  ldc.i4.2
+  IL_0010:  sub
+  IL_0011:  ldc.i4.4
+  IL_0012:  bgt.un.s   IL_004b
+  IL_0014:  nop
   .try
   {
-    IL_0042:  ldloc.0
-    IL_0043:  ldc.i4.s   -4
-    IL_0045:  bgt.s      IL_0053
-    IL_0047:  ldloc.0
-    IL_0048:  ldc.i4.s   -5
-    IL_004a:  beq.s      IL_0067
-    IL_004c:  ldloc.0
-    IL_004d:  ldc.i4.s   -4
-    IL_004f:  beq.s      IL_005d
-    IL_0051:  leave.s    IL_0078
-    IL_0053:  ldloc.0
-    IL_0054:  ldc.i4.3
-    IL_0055:  beq.s      IL_005d
-    IL_0057:  ldloc.0
-    IL_0058:  ldc.i4.5
-    IL_0059:  beq.s      IL_0067
-    IL_005b:  leave.s    IL_0078
-    IL_005d:  nop
+    IL_0015:  ldloc.0
+    IL_0016:  ldc.i4.s   -4
+    IL_0018:  bgt.s      IL_0026
+    IL_001a:  ldloc.0
+    IL_001b:  ldc.i4.s   -5
+    IL_001d:  beq.s      IL_003a
+    IL_001f:  ldloc.0
+    IL_0020:  ldc.i4.s   -4
+    IL_0022:  beq.s      IL_0030
+    IL_0024:  leave.s    IL_004b
+    IL_0026:  ldloc.0
+    IL_0027:  ldc.i4.3
+    IL_0028:  beq.s      IL_0030
+    IL_002a:  ldloc.0
+    IL_002b:  ldc.i4.5
+    IL_002c:  beq.s      IL_003a
+    IL_002e:  leave.s    IL_004b
+    IL_0030:  nop
     .try
     {
-      IL_005e:  leave.s    IL_0078
+      IL_0031:  leave.s    IL_004b
     }
     finally
     {
-      IL_0060:  ldarg.0
-      IL_0061:  call       ""void Program.<Int0>d__0.<>m__Finally2()""
-      IL_0066:  endfinally
+      IL_0033:  ldarg.0
+      IL_0034:  call       ""void Program.<Int0>d__0.<>m__Finally2()""
+      IL_0039:  endfinally
     }
-    IL_0067:  nop
+    IL_003a:  nop
     .try
     {
-      IL_0068:  leave.s    IL_0078
+      IL_003b:  leave.s    IL_004b
     }
     finally
     {
-      IL_006a:  ldarg.0
-      IL_006b:  call       ""void Program.<Int0>d__0.<>m__Finally3()""
-      IL_0070:  endfinally
+      IL_003d:  ldarg.0
+      IL_003e:  call       ""void Program.<Int0>d__0.<>m__Finally3()""
+      IL_0043:  endfinally
     }
   }
   finally
   {
-    IL_0071:  ldarg.0
-    IL_0072:  call       ""void Program.<Int0>d__0.<>m__Finally1()""
-    IL_0077:  endfinally
+    IL_0044:  ldarg.0
+    IL_0045:  call       ""void Program.<Int0>d__0.<>m__Finally1()""
+    IL_004a:  endfinally
   }
-  IL_0078:  ret
+  IL_004b:  ret
 }
 ");
         }
@@ -1031,7 +1025,8 @@ struct S : IEnumerable
 }");
         }
 
-        [Fact, WorkItem(544908, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/544908")]
+        [ConditionalFact(typeof(DesktopOnly))]
+        [WorkItem(544908, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/544908")]
         public void TestIteratorWithNullableAsCollectionVariable_Null()
         {
             var source = @"
@@ -1929,7 +1924,7 @@ using System.Collections.Generic;
 
 class Program
 {
-    public static IEnumerable<int> Foo()
+    public static IEnumerable<int> Goo()
     {
         yield return 1;
     }
@@ -1939,7 +1934,7 @@ class Program
             var parsed = new[] { Parse(source) };
             var comp = CreateCompilationWithMscorlib45(parsed);
             var verifier = this.CompileAndVerify(comp);
-            var il = verifier.VisualizeIL("Program.<Foo>d__0.System.Collections.Generic.IEnumerable<int>.GetEnumerator()");
+            var il = verifier.VisualizeIL("Program.<Goo>d__0.System.Collections.Generic.IEnumerable<int>.GetEnumerator()");
             Assert.Contains("System.Environment.CurrentManagedThreadId.get", il, StringComparison.Ordinal);
         }
 
@@ -1953,7 +1948,7 @@ using System.Collections.Generic;
 
 class Program
 {
-    public static IEnumerable<int> Foo()
+    public static IEnumerable<int> Goo()
     {
         yield return 1;
     }
@@ -1969,10 +1964,10 @@ namespace System
 
 ";
             var parsed = new[] { Parse(source) };
-            var comp = CreateCompilationWithMscorlib(parsed);
+            var comp = CreateCompilation(parsed);
             comp.MakeMemberMissing(WellKnownMember.System_Threading_Thread__ManagedThreadId);
             var verifier = this.CompileAndVerify(comp);
-            var il = verifier.VisualizeIL("Program.<Foo>d__0.System.Collections.Generic.IEnumerable<int>.GetEnumerator()");
+            var il = verifier.VisualizeIL("Program.<Goo>d__0.System.Collections.Generic.IEnumerable<int>.GetEnumerator()");
             Assert.Contains("System.Environment.CurrentManagedThreadId.get", il, StringComparison.Ordinal);
         }
 
@@ -2325,6 +2320,200 @@ class Program
   IL_00af:  ret
 }");
             Assert.True(expectedIL.IndexOf("<>_", StringComparison.Ordinal) < 0);
+        }
+
+        [Fact, WorkItem(9167, "https://github.com/dotnet/roslyn/issues/9167")]
+        public void IteratorShouldCompileWithoutOptionalAttributes()
+        {
+            #region IL for corlib without CompilerGeneratedAttribute or DebuggerNonUserCodeAttribute
+            var corlib = @"
+namespace System
+{
+    public class Object { }
+    public struct Int32 { }
+    public struct Boolean { }
+    public class String { }
+    public class Exception { }
+    public class NotSupportedException : Exception { }
+    public class ValueType { }
+    public class Enum { }
+    public struct Void { }
+    public interface IDisposable
+    {
+        void Dispose();
+    }
+}
+
+namespace System.Collections
+{
+    public interface IEnumerable
+    {
+        IEnumerator GetEnumerator();
+    }
+
+    public interface IEnumerator
+    {
+        bool MoveNext();
+        object Current { get; }
+        void Reset();
+    }
+
+    namespace Generic
+    {
+        public interface IEnumerable<T> : IEnumerable
+        {
+            new IEnumerator<T> GetEnumerator();
+        }
+
+        public interface IEnumerator<T> : IEnumerator
+        {
+            new T Current { get; }
+        }
+    }
+}";
+            #endregion
+
+            var source = @"
+public class C
+{
+    public System.Collections.IEnumerable SomeNumbers()
+    {
+        yield return 42;
+    }
+}";
+            // The compilation succeeds even though CompilerGeneratedAttribute and DebuggerNonUserCodeAttribute are not available.
+            var compilation = CreateEmptyCompilation(new[] { Parse(source), Parse(corlib) });
+            var verifier = CompileAndVerify(compilation, verify: Verification.Fails);
+            verifier.VerifyDiagnostics(
+                // warning CS8021: No value for RuntimeMetadataVersion found. No assembly containing System.Object was found nor was a value for RuntimeMetadataVersion specified through options.
+                Diagnostic(ErrorCode.WRN_NoRuntimeMetadataVersion).WithLocation(1, 1));
+        }
+
+        [Fact, WorkItem(9463, "https://github.com/dotnet/roslyn/issues/9463")]
+        public void IEnumerableIteratorReportsDiagnosticsWhenCoreTypesAreMissing()
+        {
+            // Note that IDisposable.Dispose, IEnumerator.Current and other types are missing
+            // Also, IEnumerator<T> doesn't have a get accessor
+            var source = @"
+namespace System
+{
+    public class Object { }
+    public struct Int32 { }
+    public struct Boolean { }
+    public class String { }
+    public class Exception { }
+    public class ValueType { }
+    public class Enum { }
+    public struct Void { }
+    public interface IDisposable { }
+}
+
+namespace System.Collections
+{
+    public interface IEnumerable { }
+    public interface IEnumerator { }
+}
+
+namespace System.Collections.Generic
+{
+    public interface IEnumerator<T>
+    {
+        T Current { set; }
+    }
+}
+
+public class C
+{
+    public System.Collections.IEnumerable SomeNumbers() { yield return 42; }
+}";
+            var compilation = CreateEmptyCompilation(new[] { Parse(source) });
+
+            compilation.VerifyEmitDiagnostics(
+                // warning CS8021: No value for RuntimeMetadataVersion found. No assembly containing System.Object was found nor was a value for RuntimeMetadataVersion specified through options.
+                Diagnostic(ErrorCode.WRN_NoRuntimeMetadataVersion).WithLocation(1, 1),
+                // (31,57): error CS0656: Missing compiler required member 'System.IDisposable.Dispose'
+                //     public System.Collections.IEnumerable SomeNumbers() { yield return 42; }
+                Diagnostic(ErrorCode.ERR_MissingPredefinedMember, "{ yield return 42; }").WithArguments("System.IDisposable", "Dispose").WithLocation(31, 57),
+                // (31,57): error CS0154: The property or indexer 'IEnumerator<T>.Current' cannot be used in this context because it lacks the get accessor
+                //     public System.Collections.IEnumerable SomeNumbers() { yield return 42; }
+                Diagnostic(ErrorCode.ERR_PropertyLacksGet, "{ yield return 42; }").WithArguments("System.Collections.Generic.IEnumerator<T>.Current").WithLocation(31, 57),
+                // (31,57): error CS0656: Missing compiler required member 'System.Collections.IEnumerator.Current'
+                //     public System.Collections.IEnumerable SomeNumbers() { yield return 42; }
+                Diagnostic(ErrorCode.ERR_MissingPredefinedMember, "{ yield return 42; }").WithArguments("System.Collections.IEnumerator", "Current").WithLocation(31, 57),
+                // (31,57): error CS0656: Missing compiler required member 'System.Collections.IEnumerator.MoveNext'
+                //     public System.Collections.IEnumerable SomeNumbers() { yield return 42; }
+                Diagnostic(ErrorCode.ERR_MissingPredefinedMember, "{ yield return 42; }").WithArguments("System.Collections.IEnumerator", "MoveNext").WithLocation(31, 57),
+                // (31,57): error CS0656: Missing compiler required member 'System.Collections.IEnumerator.Reset'
+                //     public System.Collections.IEnumerable SomeNumbers() { yield return 42; }
+                Diagnostic(ErrorCode.ERR_MissingPredefinedMember, "{ yield return 42; }").WithArguments("System.Collections.IEnumerator", "Reset").WithLocation(31, 57),
+                // (31,57): error CS0656: Missing compiler required member 'System.Collections.IEnumerable.GetEnumerator'
+                //     public System.Collections.IEnumerable SomeNumbers() { yield return 42; }
+                Diagnostic(ErrorCode.ERR_MissingPredefinedMember, "{ yield return 42; }").WithArguments("System.Collections.IEnumerable", "GetEnumerator").WithLocation(31, 57),
+                // (31,57): error CS0518: Predefined type 'System.Collections.Generic.IEnumerable`1' is not defined or imported
+                //     public System.Collections.IEnumerable SomeNumbers() { yield return 42; }
+                Diagnostic(ErrorCode.ERR_PredefinedTypeNotFound, "{ yield return 42; }").WithArguments("System.Collections.Generic.IEnumerable`1").WithLocation(31, 57),
+                // (31,57): error CS0656: Missing compiler required member 'System.Collections.Generic.IEnumerable`1.GetEnumerator'
+                //     public System.Collections.IEnumerable SomeNumbers() { yield return 42; }
+                Diagnostic(ErrorCode.ERR_MissingPredefinedMember, "{ yield return 42; }").WithArguments("System.Collections.Generic.IEnumerable`1", "GetEnumerator").WithLocation(31, 57));
+        }
+
+        [Fact, WorkItem(9463, "https://github.com/dotnet/roslyn/issues/9463")]
+        public void IEnumeratorIteratorReportsDiagnosticsWhenCoreTypesAreMissing()
+        {
+            // Note that IDisposable.Dispose and other types are missing
+            // Also IEnumerator.Current lacks a get accessor
+            var source = @"
+namespace System
+{
+    public class Object { }
+    public struct Int32 { }
+    public struct Boolean { }
+    public class String { }
+    public class Exception { }
+    public class ValueType { }
+    public class Enum { }
+    public struct Void { }
+
+    public interface IDisposable { }
+}
+
+namespace System.Collections
+{
+    public interface IEnumerable { }
+    public interface IEnumerator
+    {
+        Object Current { set; }
+    }
+}
+
+public class C
+{
+    public System.Collections.IEnumerator SomeNumbers() { yield return 42; }
+}";
+            var compilation = CreateEmptyCompilation(new[] { Parse(source) });
+
+            // No error about IEnumerable
+            compilation.VerifyEmitDiagnostics(
+                // (27,57): error CS0656: Missing compiler required member 'System.IDisposable.Dispose'
+                //     public System.Collections.IEnumerator SomeNumbers() { yield return 42; }
+                Diagnostic(ErrorCode.ERR_MissingPredefinedMember, "{ yield return 42; }").WithArguments("System.IDisposable", "Dispose").WithLocation(27, 57),
+                // (27,57): error CS0518: Predefined type 'System.Collections.Generic.IEnumerator`1' is not defined or imported
+                //     public System.Collections.IEnumerator SomeNumbers() { yield return 42; }
+                Diagnostic(ErrorCode.ERR_PredefinedTypeNotFound, "{ yield return 42; }").WithArguments("System.Collections.Generic.IEnumerator`1").WithLocation(27, 57),
+                // (27,57): error CS0656: Missing compiler required member 'System.Collections.Generic.IEnumerator`1.Current'
+                //     public System.Collections.IEnumerator SomeNumbers() { yield return 42; }
+                Diagnostic(ErrorCode.ERR_MissingPredefinedMember, "{ yield return 42; }").WithArguments("System.Collections.Generic.IEnumerator`1", "Current").WithLocation(27, 57),
+                // (27,57): error CS0154: The property or indexer 'IEnumerator.Current' cannot be used in this context because it lacks the get accessor
+                //     public System.Collections.IEnumerator SomeNumbers() { yield return 42; }
+                Diagnostic(ErrorCode.ERR_PropertyLacksGet, "{ yield return 42; }").WithArguments("System.Collections.IEnumerator.Current").WithLocation(27, 57),
+                // (27,57): error CS0656: Missing compiler required member 'System.Collections.IEnumerator.MoveNext'
+                //     public System.Collections.IEnumerator SomeNumbers() { yield return 42; }
+                Diagnostic(ErrorCode.ERR_MissingPredefinedMember, "{ yield return 42; }").WithArguments("System.Collections.IEnumerator", "MoveNext").WithLocation(27, 57),
+                // (27,57): error CS0656: Missing compiler required member 'System.Collections.IEnumerator.Reset'
+                //     public System.Collections.IEnumerator SomeNumbers() { yield return 42; }
+                Diagnostic(ErrorCode.ERR_MissingPredefinedMember, "{ yield return 42; }").WithArguments("System.Collections.IEnumerator", "Reset").WithLocation(27, 57),
+                // warning CS8021: No value for RuntimeMetadataVersion found. No assembly containing System.Object was found nor was a value for RuntimeMetadataVersion specified through options.
+                Diagnostic(ErrorCode.WRN_NoRuntimeMetadataVersion).WithLocation(1, 1));
         }
     }
 }

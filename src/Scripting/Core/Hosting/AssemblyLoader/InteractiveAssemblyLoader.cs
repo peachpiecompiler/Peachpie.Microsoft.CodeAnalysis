@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
@@ -243,7 +243,7 @@ namespace Microsoft.CodeAnalysis.Scripting.Hosting
             lock (_referencesLock)
             {
                 LoadedAssembly loadedAssembly;
-                if (requestingAssemblyOpt != null && 
+                if (requestingAssemblyOpt != null &&
                     _assembliesLoadedFromLocation.TryGetValue(requestingAssemblyOpt, out loadedAssembly))
                 {
                     loadDirectoryOpt = Path.GetDirectoryName(loadedAssembly.OriginalPath);
@@ -288,7 +288,7 @@ namespace Microsoft.CodeAnalysis.Scripting.Hosting
                             conflictingLoadedAssemblyOpt = loadedInfos.FirstOrDefault(info => !info.Identity.IsStrongName);
                         }
 
-                        loadedAssemblyWithEqualNameAndVersionOpt = loadedInfos.FirstOrDefault(info => 
+                        loadedAssemblyWithEqualNameAndVersionOpt = loadedInfos.FirstOrDefault(info =>
                             AssemblyIdentityComparer.SimpleNameComparer.Equals(info.Identity.Name, identity.Name) &&
                             info.Identity.Version == identity.Version);
                     }
@@ -306,22 +306,27 @@ namespace Microsoft.CodeAnalysis.Scripting.Hosting
                         {
                             return loadedAssemblyWithEqualNameAndVersionOpt.Assembly;
                         }
-
-                        // TODO: localize
+                        
                         // error: attempt to load an assembly with the same identity as already loaded assembly but different content
                         throw new InteractiveAssemblyLoaderException(
-                            $"Assembly '{identity.Name}, Version={identity.Version}' has already been loaded from '{loadedAssemblyWithEqualNameAndVersionOpt.LocationOpt}'. " +
-                            $"A different assembly with the same name and version can't be loaded: '{assemblyFilePathOpt}'.");
+                            string.Format(null, ScriptingResources.AssemblyAlreadyLoaded, 
+                            identity.Name, 
+                            identity.Version, 
+                            loadedAssemblyWithEqualNameAndVersionOpt.LocationOpt, 
+                            assemblyFilePathOpt)
+                        );
                     }
 
                     // TODO: Desktop FX only
                     if (!conflictingLoadedAssemblyOpt.IsDefault)
                     {
-                        // TODO: localize
                         // error: attempt to load an assembly with the same identity as already loaded assembly but different content
                         throw new InteractiveAssemblyLoaderException(
-                            $"Assembly '{identity.Name}' has already been loaded from '{conflictingLoadedAssemblyOpt.LocationOpt}'. " +
-                            $"A different assembly with the same name can't be loaded unless it's signed: '{assemblyFilePathOpt}'.");
+                            string.Format(null, ScriptingResources.AssemblyAlreadyLoadedNotSigned,
+                            identity.Name,
+                            conflictingLoadedAssemblyOpt.LocationOpt,
+                            assemblyFilePathOpt)
+                        );
                     }
 
                     assembly = ShadowCopyAndLoadDependency(assemblyFilePathOpt).Assembly;

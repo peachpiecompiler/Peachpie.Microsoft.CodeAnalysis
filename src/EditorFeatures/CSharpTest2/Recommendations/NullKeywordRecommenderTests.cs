@@ -1,7 +1,7 @@
 ﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System.Threading.Tasks;
-using Microsoft.CodeAnalysis.Text;
+using Microsoft.CodeAnalysis.Test.Utilities;
 using Roslyn.Test.Utilities;
 using Xunit;
 
@@ -44,7 +44,7 @@ $$");
         public async Task TestNotInUsingAlias()
         {
             await VerifyAbsenceAsync(
-@"using Foo = $$");
+@"using Goo = $$");
         }
 
         [Fact, Trait(Traits.Feature, Traits.Features.KeywordRecommending)]
@@ -242,7 +242,7 @@ $$");
         public async Task TestInReferenceSwitch()
         {
             await VerifyKeywordAsync(AddInsideMethod(
-@"switch (""foo"")
+@"switch (""goo"")
         {
             case $$
         }"));
@@ -266,7 +266,7 @@ $$");
         public async Task TestNotInDefaultParameterValue()
         {
             await VerifyKeywordAsync(
-@"class C { void Foo(string[] args = $$");
+@"class C { void Goo(string[] args = $$");
         }
 
         [WorkItem(544219, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/544219")]

@@ -1,9 +1,9 @@
-' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
-Imports System.Threading.Tasks
 Imports Microsoft.CodeAnalysis
 Imports Microsoft.CodeAnalysis.Editor.UnitTests
 Imports Microsoft.CodeAnalysis.Editor.UnitTests.Workspaces
+Imports Microsoft.CodeAnalysis.Test.Utilities
 Imports Microsoft.CodeAnalysis.Text
 Imports Microsoft.VisualStudio.Composition
 Imports Microsoft.VisualStudio.LanguageServices.Implementation.Preview
@@ -11,21 +11,22 @@ Imports Microsoft.VisualStudio.Text.Editor
 Imports Roslyn.Test.Utilities
 
 Namespace Microsoft.VisualStudio.LanguageServices.UnitTests.Preview
+    <[UseExportProvider]>
     Public Class PreviewChangesTests
 
-        Private _exportProvider As ExportProvider = MinimalTestExportProvider.CreateExportProvider(
+        Private _exportProviderFactory As IExportProviderFactory = ExportProviderCache.GetOrCreateExportProviderFactory(
             TestExportProvider.MinimumCatalogWithCSharpAndVisualBasic.WithPart(GetType(StubVsEditorAdaptersFactoryService)))
 
         <WpfFact>
-        Public Async Function TestListStructure() As Task
-            Using workspace = Await TestWorkspace.CreateCSharpAsync(<text>
+        Public Sub TestListStructure()
+            Using workspace = TestWorkspace.CreateCSharp(<text>
 Class C
 {
-    void Foo()
+    void Goo()
     {
         $$
     }
-}</text>.Value, exportProvider:=_exportProvider)
+}</text>.Value, exportProvider:=_exportProviderFactory.CreateExportProvider())
                 Dim expectedItems = New List(Of Tuple(Of String, Integer)) From
                     {
                     Tuple.Create("topLevelItemName", 0),
@@ -43,7 +44,7 @@ Class C
                 Dim componentModel = New MockComponentModel(workspace.ExportProvider)
 
                 Dim previewEngine = New PreviewEngine(
-                    "Title", "helpString", "description", "topLevelItemName", CodeAnalysis.Glyph.Assembly,
+                    "Title", "helpString", "description", "topLevelItemName", Glyph.Assembly,
                     forkedDocument.Project.Solution,
                     workspace.CurrentSolution,
                     componentModel)
@@ -54,17 +55,17 @@ Class C
 
                 AssertTreeStructure(expectedItems, topLevelList)
             End Using
-        End Function
+        End Sub
 
         <WpfFact, WorkItem(1036455, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/1036455")>
-        Public Async Function TestListStructure_AddedDeletedDocuments() As Task
+        Public Sub TestListStructure_AddedDeletedDocuments()
             Dim workspaceXml =
                 <Workspace>
                     <Project Language=<%= LanguageNames.CSharp %> CommonReferences="true">
                         <Document FilePath="test1.cs">
 Class C
 {
-    void Foo()
+    void Goo()
     {
         $$
     }
@@ -74,15 +75,15 @@ Class C
                     </Project>
                 </Workspace>
 
-            Using workspace = Await TestWorkspace.CreateAsync(workspaceXml, exportProvider:=_exportProvider)
+            Using workspace = TestWorkspace.Create(workspaceXml, exportProvider:=_exportProviderFactory.CreateExportProvider())
                 Dim expectedItems = New List(Of Tuple(Of String, Integer)) From
                     {
                     Tuple.Create("topLevelItemName", 0),
                     Tuple.Create("test1.cs", 1),
                     Tuple.Create("insertion!", 2),
-                    Tuple.Create(ServicesVSResources.PreviewChangesAddedPrefix + "test3.cs", 1),
+                    Tuple.Create(ServicesVSResources.bracket_plus_bracket + "test3.cs", 1),
                     Tuple.Create("// This file will be added!", 2),
-                    Tuple.Create(ServicesVSResources.PreviewChangesDeletedPrefix + "test2.cs", 1),
+                    Tuple.Create(ServicesVSResources.bracket_bracket + "test2.cs", 1),
                     Tuple.Create("// This file will be deleted!", 2)
                     }
 
@@ -103,7 +104,7 @@ Class C
                 Dim componentModel = New MockComponentModel(workspace.ExportProvider)
 
                 Dim previewEngine = New PreviewEngine(
-                    "Title", "helpString", "description", "topLevelItemName", CodeAnalysis.Glyph.Assembly,
+                    "Title", "helpString", "description", "topLevelItemName", Glyph.Assembly,
                     newSolution,
                     workspace.CurrentSolution,
                     componentModel)
@@ -114,18 +115,18 @@ Class C
 
                 AssertTreeStructure(expectedItems, topLevelList)
             End Using
-        End Function
+        End Sub
 
         <WpfFact>
-        Public Async Function TestCheckedItems() As Task
-            Using workspace = Await TestWorkspace.CreateCSharpAsync(<text>
+        Public Sub TestCheckedItems()
+            Using workspace = TestWorkspace.CreateCSharp(<text>
 Class C
 {
-    void Foo()
+    void Goo()
     {
         $$
     }
-}</text>.Value, exportProvider:=_exportProvider)
+}</text>.Value, exportProvider:=_exportProviderFactory.CreateExportProvider())
                 Dim expectedItems = New List(Of String) From {"topLevelItemName", "*test1.cs", "**insertion!"}
 
                 Dim documentId = workspace.Documents.First().Id
@@ -138,7 +139,7 @@ Class C
                 Dim componentModel = New MockComponentModel(workspace.ExportProvider)
 
                 Dim previewEngine = New PreviewEngine(
-                    "Title", "helpString", "description", "topLevelItemName", CodeAnalysis.Glyph.Assembly,
+                    "Title", "helpString", "description", "topLevelItemName", Glyph.Assembly,
                     forkedDocument.Project.Solution,
                     workspace.CurrentSolution,
                     componentModel)
@@ -160,17 +161,17 @@ Class C
 
 
             End Using
-        End Function
+        End Sub
 
         <WpfFact, WorkItem(1036455, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/1036455")>
-        Public Async Function TestCheckedItems_AddedDeletedDocuments() As Task
+        Public Sub TestCheckedItems_AddedDeletedDocuments()
             Dim workspaceXml =
                 <Workspace>
                     <Project Language=<%= LanguageNames.CSharp %> CommonReferences="true">
                         <Document FilePath="test1.cs">
 Class C
 {
-    void Foo()
+    void Goo()
     {
         $$
     }
@@ -181,7 +182,7 @@ Class C
                     </Project>
                 </Workspace>
 
-            Using workspace = Await TestWorkspace.CreateAsync(workspaceXml, exportProvider:=_exportProvider)
+            Using workspace = TestWorkspace.Create(workspaceXml, exportProvider:=_exportProviderFactory.CreateExportProvider())
                 Dim docId = workspace.Documents.First().Id
                 Dim document = workspace.CurrentSolution.GetDocument(docId)
 
@@ -204,7 +205,7 @@ Class C
                 newSolution = newSolution.AddDocument(addedDocumentId2, "test5.cs", "// This file will be unchecked and not added!")
 
                 Dim previewEngine = New PreviewEngine(
-                    "Title", "helpString", "description", "topLevelItemName", CodeAnalysis.Glyph.Assembly,
+                    "Title", "helpString", "description", "topLevelItemName", Glyph.Assembly,
                     newSolution,
                     workspace.CurrentSolution,
                     componentModel)
@@ -221,8 +222,8 @@ Class C
                     Dim checkedItems = New List(Of String) From
                     {
                         "test1.cs",
-                        ServicesVSResources.PreviewChangesAddedPrefix + "test4.cs",
-                        ServicesVSResources.PreviewChangesDeletedPrefix + "test2.cs"
+                        ServicesVSResources.bracket_plus_bracket + "test4.cs",
+                        ServicesVSResources.bracket_bracket + "test2.cs"
                     }
 
                     SetCheckedChildren(checkedItems, topLevelList)
@@ -241,10 +242,10 @@ Class C
                     Assert.Equal("// This file will just escape deletion!", finalNotRemovedDocText)
                 End Using
             End Using
-        End Function
+        End Sub
 
         <WpfFact>
-        Public Async Function TestLinkedFileChangesMergedAndDeduplicated() As Task
+        Public Sub TestLinkedFileChangesMergedAndDeduplicated()
 
             Dim workspaceXml = <Workspace>
                                    <Project Language="Visual Basic" CommonReferences="true" AssemblyName="VBProj1">
@@ -264,7 +265,7 @@ End Class
                                    </Project>
                                </Workspace>
 
-            Using workspace = Await TestWorkspace.CreateAsync(workspaceXml, , exportProvider:=_exportProvider)
+            Using workspace = TestWorkspace.Create(workspaceXml, , exportProvider:=_exportProviderFactory.CreateExportProvider())
                 Dim documentId1 = workspace.Documents.Where(Function(d) d.Project.Name = "VBProj1").Single().Id
                 Dim document1 = workspace.CurrentSolution.GetDocument(documentId1)
 
@@ -284,7 +285,7 @@ End Class
                 Dim componentModel = New MockComponentModel(workspace.ExportProvider)
 
                 Dim previewEngine = New PreviewEngine(
-                    "Title", "helpString", "description", "topLevelItemName", CodeAnalysis.Glyph.Assembly,
+                    "Title", "helpString", "description", "topLevelItemName", Glyph.Assembly,
                     updatedSolution,
                     workspace.CurrentSolution,
                     componentModel)
@@ -303,7 +304,7 @@ End Class
 
                 AssertTreeStructure(expectedItems, topLevelList)
             End Using
-        End Function
+        End Sub
 
         Private Sub AssertTreeStructure(expectedItems As List(Of Tuple(Of String, Integer)), topLevelList As ChangeList)
             Dim outChangeList As Object = Nothing

@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
@@ -48,6 +48,14 @@ namespace Microsoft.CodeAnalysis.SolutionCrawler
                     _pendingWork = new Dictionary<DocumentId, Data>();
 
                     Start();
+
+                    // Register a clean-up task to ensure pending work items are flushed from the queue if they will
+                    // never be processed.
+                    AsyncProcessorTask.ContinueWith(
+                        _ => ClearQueueWorker(_workGate, _pendingWork, data => data.AsyncToken),
+                        CancellationToken.None,
+                        TaskContinuationOptions.ExecuteSynchronously,
+                        TaskScheduler.Default);
                 }
 
                 public override Task AsyncProcessorTask
@@ -89,14 +97,11 @@ namespace Microsoft.CodeAnalysis.SolutionCrawler
                     {
                         return false;
                     }
-
                     // see whether we already have semantic model. otherwise, use the expansive full project dependency one
                     // TODO: if there is a reliable way to track changed member, we could use GetSemanticModel here which could
                     //       rebuild compilation from scratch
-                    SemanticModel model;
-                    SyntaxNode declarationNode;
-                    if (!document.TryGetSemanticModel(out model) ||
-                        !changedMember.TryResolve(await document.GetSyntaxRootAsync(this.CancellationToken).ConfigureAwait(false), out declarationNode))
+                    if (!document.TryGetSemanticModel(out var model) ||
+                        !changedMember.TryResolve(await document.GetSyntaxRootAsync(this.CancellationToken).ConfigureAwait(false), out SyntaxNode declarationNode))
                     {
                         return false;
                     }
@@ -220,9 +225,7 @@ namespace Microsoft.CodeAnalysis.SolutionCrawler
                     // most likely we got here since we are called due to typing.
                     // calculate dependency here and register each affected project to the next pipe line
                     var solution = document.Project.Solution;
-
-                    var graph = solution.GetProjectDependencyGraph();
-                    foreach (var projectId in graph.GetProjectsThatTransitivelyDependOnThisProject(self).Concat(self))
+                    foreach (var projectId in GetProjectsToAnalyze(solution, self))
                     {
                         var project = solution.GetProject(projectId);
                         if (project == null)
@@ -230,8 +233,7 @@ namespace Microsoft.CodeAnalysis.SolutionCrawler
                             continue;
                         }
 
-                        Compilation compilation;
-                        if (project.TryGetCompilation(out compilation))
+                        if (project.TryGetCompilation(out var compilation))
                         {
                             var assembly = compilation.Assembly;
                             if (assembly != null && !assembly.IsSameAssemblyOrHasFriendAccessTo(internalVisibleToAssembly))
@@ -252,8 +254,7 @@ namespace Microsoft.CodeAnalysis.SolutionCrawler
 
                     using (_workGate.DisposableWait(this.CancellationToken))
                     {
-                        Data data;
-                        if (_pendingWork.TryGetValue(document.Id, out data))
+                        if (_pendingWork.TryGetValue(document.Id, out var data))
                         {
                             // create new async token and dispose old one.
                             var newAsyncToken = this.Listener.BeginAsyncOperation("EnqueueSemanticChange");
@@ -287,6 +288,33 @@ namespace Microsoft.CodeAnalysis.SolutionCrawler
 
                         return first.Value;
                     }
+                }
+
+                private static void ClearQueueWorker<TKey, TValue>(NonReentrantLock gate, Dictionary<TKey, TValue> map, Func<TValue, IDisposable> disposerSelector)
+                {
+                    using (gate.DisposableWait(CancellationToken.None))
+                    {
+                        foreach (var (_, data) in map)
+                        {
+                            disposerSelector?.Invoke(data)?.Dispose();
+                        }
+
+                        map.Clear();
+                    }
+                }
+
+                private static IEnumerable<ProjectId> GetProjectsToAnalyze(Solution solution, ProjectId projectId)
+                {
+                    var graph = solution.GetProjectDependencyGraph();
+
+                    if (solution.Workspace.Options.GetOption(InternalSolutionCrawlerOptions.DirectDependencyPropagationOnly))
+                    {
+                        return graph.GetProjectsThatDirectlyDependOnThisProject(projectId).Concat(projectId);
+                    }
+
+                    // re-analyzing all transitive dependencies is very expensive. by default we will only
+                    // re-analyze direct dependency for now. and consider flipping the default only if we must.
+                    return graph.GetProjectsThatTransitivelyDependOnThisProject(projectId).Concat(projectId);
                 }
 
                 private struct Data
@@ -332,6 +360,14 @@ namespace Microsoft.CodeAnalysis.SolutionCrawler
                         _pendingWork = new Dictionary<ProjectId, Data>();
 
                         Start();
+
+                        // Register a clean-up task to ensure pending work items are flushed from the queue if they will
+                        // never be processed.
+                        AsyncProcessorTask.ContinueWith(
+                            _ => ClearQueueWorker(_workGate, _pendingWork, data => data.AsyncToken),
+                            CancellationToken.None,
+                            TaskContinuationOptions.ExecuteSynchronously,
+                            TaskScheduler.Default);
                     }
 
                     public void Enqueue(ProjectId projectId, bool needDependencyTracking = false)
@@ -392,9 +428,7 @@ namespace Microsoft.CodeAnalysis.SolutionCrawler
 
                             // do dependency tracking here with current solution
                             var solution = _registration.CurrentSolution;
-
-                            var graph = solution.GetProjectDependencyGraph();
-                            foreach (var projectId in graph.GetProjectsThatTransitivelyDependOnThisProject(data.ProjectId).Concat(data.ProjectId))
+                            foreach (var projectId in GetProjectsToAnalyze(solution, data.ProjectId))
                             {
                                 project = solution.GetProject(projectId);
                                 await EnqueueWorkItemAsync(project).ConfigureAwait(false);

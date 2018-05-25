@@ -9,6 +9,7 @@ using System.Threading;
 using Microsoft.CodeAnalysis.Collections;
 using Microsoft.CodeAnalysis.CSharp.Symbols;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.PooledObjects;
 using Microsoft.CodeAnalysis.Text;
 
 namespace Microsoft.CodeAnalysis.CSharp.Symbols
@@ -18,7 +19,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
     /// namespaces. Any sub-namespaces with the same names are also merged if they have two or more
     /// instances.
     /// 
-    /// Merged namespaces are used to merged the symbols from multiple metadata modules and the
+    /// Merged namespaces are used to merge the symbols from multiple metadata modules and the
     /// source "module" into a single symbol tree that represents all the available symbols. The
     /// compiler resolves names against this merged set of symbols.
     /// 

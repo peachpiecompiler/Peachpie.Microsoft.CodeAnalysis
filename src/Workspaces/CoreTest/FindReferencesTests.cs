@@ -14,7 +14,7 @@ using Xunit;
 
 namespace Microsoft.CodeAnalysis.UnitTests
 {
-    public partial class FindReferencesTests : TestBase
+    public partial class FindReferencesTests : ServicesTestBase
     {
         private Solution CreateSolution()
         {
@@ -26,9 +26,9 @@ namespace Microsoft.CodeAnalysis.UnitTests
             var pid = ProjectId.CreateNewId();
             var did = DocumentId.CreateNewId(pid);
             return CreateSolution()
-                    .AddProject(pid, "foo", "foo", LanguageNames.CSharp)
+                    .AddProject(pid, "goo", "goo", LanguageNames.CSharp)
                     .AddMetadataReference(pid, MscorlibRef)
-                    .AddDocument(did, "foo.cs", SourceText.From(sourceText));
+                    .AddDocument(did, "goo.cs", SourceText.From(sourceText));
         }
 
         [Fact]
@@ -64,10 +64,10 @@ public class C {
             var pid = ProjectId.CreateNewId();
             var did = DocumentId.CreateNewId(pid);
             var solution = CreateSolution()
-                           .AddProject(pid, "foo", "foo.dll", LanguageNames.CSharp)
+                           .AddProject(pid, "goo", "goo.dll", LanguageNames.CSharp)
                            .AddMetadataReference(pid, MscorlibRef)
                            .AddMetadataReference(pid, ((PortableExecutableReference)MscorlibRef).WithAliases(new[] { "X" }))
-                           .AddDocument(did, "foo.cs", SourceText.From(text));
+                           .AddDocument(did, "goo.cs", SourceText.From(text));
 
             var project = solution.Projects.First();
             var symbol = (IFieldSymbol)(await project.GetCompilationAsync()).GetTypeByMetadataName("C").GetMembers("X").First();
@@ -268,9 +268,85 @@ class B : C, A
             Assert.Empty(expectedMatchedLines);
         }
 
+        [WorkItem(4936, "https://github.com/dotnet/roslyn/issues/4936")]
+        [Fact]
+        public async Task OverriddenMethodsFromPortableToDesktop()
+        {
+            var solution = new AdhocWorkspace().CurrentSolution;
+
+            // create portable assembly with a virtual method
+            solution = AddProjectWithMetadataReferences(solution, "PortableProject", LanguageNames.CSharp, @"
+namespace N
+{
+    public class BaseClass
+    {
+        public virtual void SomeMethod() { }
+    }
+}
+", MscorlibRefPortable);
+
+            // create a normal assembly with a type derived from the portable base and overriding the method
+            solution = AddProjectWithMetadataReferences(solution, "NormalProject", LanguageNames.CSharp, @"
+using N;
+namespace M
+{
+    public class DerivedClass : BaseClass
+    {
+        public override void SomeMethod() { }
+    }
+}
+", MscorlibRef, solution.Projects.Single(pid => pid.Name == "PortableProject").Id);
+
+            // get symbols for methods
+            var portableCompilation = await solution.Projects.Single(p => p.Name == "PortableProject").GetCompilationAsync();
+            var baseType = portableCompilation.GetTypeByMetadataName("N.BaseClass");
+            var baseVirtualMethodSymbol = baseType.GetMembers("SomeMethod").Single();
+
+            var normalCompilation = await solution.Projects.Single(p => p.Name == "NormalProject").GetCompilationAsync();
+            var derivedType = normalCompilation.GetTypeByMetadataName("M.DerivedClass");
+            var overriddenMethodSymbol = derivedType.GetMembers("SomeMethod").Single();
+
+            // FAR from the virtual method should find both methods
+            var refsFromVirtual = await SymbolFinder.FindReferencesAsync(baseVirtualMethodSymbol, solution);
+            Assert.Equal(2, refsFromVirtual.Count());
+
+            // FAR from the overriden method should find both methods
+            var refsFromOverride = await SymbolFinder.FindReferencesAsync(overriddenMethodSymbol, solution);
+            Assert.Equal(2, refsFromOverride.Count());
+
+            // all methods returned should be equal
+            var refsFromVirtualSorted = refsFromVirtual.Select(r => r.Definition).OrderBy(r => r.ContainingType.Name).ToArray();
+            var refsFromOverrideSorted = refsFromOverride.Select(r => r.Definition).OrderBy(r => r.ContainingType.Name).ToArray();
+            Assert.Equal(refsFromVirtualSorted, refsFromOverrideSorted);
+        }
+
+        [Fact]
+        public async Task FindRefereceToUnmanagedConstraint_Type()
+        {
+            var text = @"
+interface unmanaged                             // Line 1
+{
+}
+abstract class C<T> where T : unmanaged         // Line 4
+{
+}";
+            var solution = GetSingleDocumentSolution(text);
+            var project = solution.Projects.First();
+            var comp = await project.GetCompilationAsync();
+
+            var constraint = comp.GetTypeByMetadataName("C`1").TypeParameters.Single().ConstraintTypes.Single();
+            var result = (await SymbolFinder.FindReferencesAsync(constraint, solution)).Single();
+
+            Verify(result, new HashSet<int> { 1, 4 });
+        }
+
         private static void Verify(ReferencedSymbol reference, HashSet<int> expectedMatchedLines)
         {
-            System.Action<Location> verifier = (location) => Assert.True(expectedMatchedLines.Remove(location.GetLineSpan().StartLinePosition.Line));
+            void verifier(Location location)
+            {
+                var line = location.GetLineSpan().StartLinePosition.Line;
+                Assert.True(expectedMatchedLines.Remove(line), $"An unexpected reference was found on line number {line}.");
+            }
 
             foreach (var location in reference.Locations)
             {

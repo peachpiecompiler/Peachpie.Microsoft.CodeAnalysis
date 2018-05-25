@@ -1,11 +1,13 @@
 ﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
-using Microsoft.CodeAnalysis.GeneratedCodeRecognition;
-using Microsoft.CodeAnalysis.Host;
+using System.Threading;
+using Microsoft.CodeAnalysis.Shared.Extensions;
+using Microsoft.CodeAnalysis.Test.Utilities;
 using Xunit;
 
 namespace Microsoft.CodeAnalysis.UnitTests
 {
+    [UseExportProvider]
     public class GeneratedCodeRecognitionTests
     {
         [Fact]
@@ -54,11 +56,11 @@ namespace Microsoft.CodeAnalysis.UnitTests
                 var document = project.AddDocument(fileName, "");
                 if (assertGenerated)
                 {
-                    Assert.True(IsGeneratedCode(document), string.Format("Expected file '{0}' to be interpreted as generated code", fileName));
+                    Assert.True(document.IsGeneratedCode(CancellationToken.None), string.Format("Expected file '{0}' to be interpreted as generated code", fileName));
                 }
                 else
                 {
-                    Assert.False(IsGeneratedCode(document), string.Format("Did not expect file '{0}' to be interpreted as generated code", fileName));
+                    Assert.False(document.IsGeneratedCode(CancellationToken.None), string.Format("Did not expect file '{0}' to be interpreted as generated code", fileName));
                 }
             }
         }
@@ -70,11 +72,6 @@ namespace Microsoft.CodeAnalysis.UnitTests
             return new AdhocWorkspace().CurrentSolution
                 .AddProject(projectId, projectName, projectName, LanguageNames.CSharp)
                 .GetProject(projectId);
-        }
-
-        private static bool IsGeneratedCode(Document document)
-        {
-            return document.Project.Solution.Workspace.Services.GetService<IGeneratedCodeRecognitionService>().IsGeneratedCode(document);
         }
     }
 }

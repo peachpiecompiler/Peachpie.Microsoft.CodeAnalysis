@@ -1,40 +1,90 @@
 #!/usr/bin/env bash
+# Copyright (c) .NET Foundation and contributors. All rights reserved.
+# Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-MONO_PATH=$1
-BUILD_CONFIGURATION=$2
-XUNIT_VERSION=$3
-MONO_DIR="$(dirname $MONO_PATH)"
+set -e
+set -u
 
-export MONO_THREADS_PER_CPU=50
-export PATH=$MONO_DIR:$PATH
+build_configuration=${1:-Debug}
+runtime=${2:-dotnet}
 
-# This function will update the PATH variable to put the desired
-# version of Mono ahead of the system one. 
+this_dir="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${this_dir}"/build-utils.sh
 
-xunit_runner=~/.nuget/packages/xunit.runner.console/$XUNIT_VERSION/tools/xunit.console.x86.exe
-test_binaries=(
-	Roslyn.Compilers.CSharp.CommandLine.UnitTests
-	Roslyn.Compilers.CSharp.Syntax.UnitTests
-	Roslyn.Compilers.CSharp.Semantic.UnitTests
-	Roslyn.Compilers.CSharp.Symbol.UnitTests
-	Roslyn.Compilers.VisualBasic.Syntax.UnitTests)
-any_failed=false
+root_path="$(get_repo_dir)"
+binaries_path="${root_path}"/Binaries
+unittest_dir="${binaries_path}"/"${build_configuration}"/UnitTests
+log_dir="${binaries_path}"/"${build_configuration}"/xUnitResults
+nuget_dir="${HOME}"/.nuget/packages
+xunit_console_version="$(get_package_version dotnet-xunit)"
 
-# Need to copy over the execution dependencies.  This isn't being done correctly
-# by msbuild at the moment. 
-cp ~/.nuget/packages/xunit.extensibility.execution/$XUNIT_VERSION/lib/net45/xunit.execution.desktop.* Binaries/$BUILD_CONFIGURATION
-
-for i in "${test_binaries[@]}"
-do
-	mkdir -p Binaries/$BUILD_CONFIGURATION/xUnitResults/
-	mono $MONO_ARGS $xunit_runner Binaries/$BUILD_CONFIGURATION/$i.dll -xml Binaries/$BUILD_CONFIGURATION/xUnitResults/$i.dll.xml -noshadow
-	if [ $? -ne 0 ]; then
-		any_failed=true
-	fi
-done
-
-if [ "$any_failed" = "true" ]; then
-	echo Unit test failed
-	exit 1
+if [[ "${runtime}" == "dotnet" ]]; then
+    target_framework=netcoreapp2.0
+    xunit_console="${nuget_dir}"/xunit.runner.console/"${xunit_console_version}"/tools/${target_framework}/xunit.console.dll
+elif [[ "${runtime}" == "mono" ]]; then
+    target_framework=net461
+    xunit_console="${nuget_dir}"/xunit.runner.console/"${xunit_console_version}"/tools/net452/xunit.console.exe
+else
+    echo "Unknown runtime: ${runtime}"
+    exit 1
 fi
 
+UNAME="$(uname)"
+if [ "$UNAME" == "Darwin" ]; then
+    runtime_id=osx-x64
+elif [ "$UNAME" == "Linux" ]; then
+    runtime_id=linux-x64
+else
+    echo "Unknown OS: $UNAME" 1>&2
+    exit 1
+fi
+
+echo "Publishing ILAsm.csproj"
+dotnet publish "${root_path}/src/Tools/ILAsm" --no-restore --runtime ${runtime_id} --self-contained -o "${binaries_path}/Tools/ILAsm"
+
+echo "Using ${xunit_console}"
+
+# Discover and run the tests
+mkdir -p "${log_dir}"
+
+exit_code=0
+for test_path in "${unittest_dir}"/*/"${target_framework}"
+do
+    file_name=( "${test_path}"/*.UnitTests.dll )
+    log_file="${log_dir}"/"$(basename "${file_name%.*}.xml")"
+    deps_json="${file_name%.*}".deps.json
+    runtimeconfig_json="${file_name%.*}".runtimeconfig.json
+
+    # If the user specifies a test on the command line, only run that one
+    # "${3:-}" => take second arg, empty string if unset
+    if [[ ("${3:-}" != "") && (! "${file_name}" =~ "${2:-}") ]]
+    then
+        echo "Skipping ${file_name}"
+        continue
+    fi
+
+    echo Running "${runtime} ${file_name[@]}"
+    if [[ "${runtime}" == "dotnet" ]]; then
+        runner="dotnet exec --depsfile ${deps_json} --runtimeconfig ${runtimeconfig_json}"
+        if [[ "${file_name[@]}" == *'Roslyn.Compilers.CSharp.Emit.UnitTests.dll' ]]
+        then
+            echo "Skipping ${file_name[@]}"
+            continue
+        fi
+    elif [[ "${runtime}" == "mono" ]]; then
+        runner=mono
+        if [[ "${file_name[@]}" == *'Microsoft.CodeAnalysis.CSharp.Scripting.UnitTests.dll' || "${file_name[@]}" == *'Roslyn.Compilers.CompilerServer.UnitTests.dll' || "${file_name[@]}" == *'Roslyn.Compilers.CSharp.Emit.UnitTests.dll' ]]
+        then
+            echo "Skipping ${file_name[@]}"
+            continue
+        fi
+    fi
+    if ${runner} "${xunit_console}" "${file_name[@]}" -xml "${log_file}"
+    then
+        echo "Assembly ${file_name[@]} passed"
+    else
+        echo "Assembly ${file_name[@]} failed"
+        exit_code=1
+    fi
+done
+exit ${exit_code}

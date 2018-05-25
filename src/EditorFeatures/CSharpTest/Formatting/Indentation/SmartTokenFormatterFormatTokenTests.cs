@@ -1,12 +1,9 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
-using System.ComponentModel.Composition.Hosting;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.Editor.UnitTests;
 using Microsoft.CodeAnalysis.Editor.UnitTests.Workspaces;
-using Microsoft.CodeAnalysis.Formatting;
+using Microsoft.CodeAnalysis.Test.Utilities;
 using Microsoft.CodeAnalysis.Text;
 using Roslyn.Test.Utilities;
 using Xunit;
@@ -185,7 +182,7 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.Formatting.Indentation
 {
     class Class
     {
-        int Foo
+        int Goo
             {";
 
             await AssertSmartTokenFormatterOpenBraceAsync(
@@ -202,7 +199,7 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.Formatting.Indentation
 {
     class Class
     {
-        int Foo
+        int Goo
         {
             }";
 
@@ -220,7 +217,7 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.Formatting.Indentation
 {
     class Class
     {
-        event EventHandler Foo
+        event EventHandler Goo
             {";
 
             await AssertSmartTokenFormatterOpenBraceAsync(
@@ -237,7 +234,7 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.Formatting.Indentation
 {
     class Class
     {
-        event EventHandler Foo
+        event EventHandler Goo
         {
             }";
 
@@ -526,7 +523,7 @@ using System.Linq;
 
 class Program
 {
-    static IEnumerable<int> Foo()
+    static IEnumerable<int> Goo()
     {
         return from a in new[] { 1, 2, 3 }
                     select
@@ -548,7 +545,7 @@ using System.Linq;
 
 class Program
 {
-    static IEnumerable<int> Foo()
+    static IEnumerable<int> Goo()
     {
         return from a in new[] { 1, 2, 3 }
                     where
@@ -562,10 +559,8 @@ class Program
 
         private Task AssertSmartTokenFormatterOpenBraceWithBaseIndentationAsync(string markup, int baseIndentation, int expectedIndentation)
         {
-            string code;
-            int position;
-            TextSpan span;
-            MarkupTestFile.GetPositionAndSpan(markup, out code, out position, out span);
+            MarkupTestFile.GetPositionAndSpan(markup,
+                out var code, out var position, out TextSpan span);
 
             return AssertSmartTokenFormatterOpenBraceAsync(
                 code,
@@ -592,7 +587,7 @@ class Program
             int indentationLine)
         {
             // create tree service
-            using (var workspace = await TestWorkspace.CreateCSharpAsync(code))
+            using (var workspace = TestWorkspace.CreateCSharp(code))
             {
                 var buffer = workspace.Documents.First().GetTextBuffer();
 
@@ -603,10 +598,8 @@ class Program
 
         private Task AssertSmartTokenFormatterCloseBraceWithBaseIndentation(string markup, int baseIndentation, int expectedIndentation)
         {
-            string code;
-            int position;
-            TextSpan span;
-            MarkupTestFile.GetPositionAndSpan(markup, out code, out position, out span);
+            MarkupTestFile.GetPositionAndSpan(markup,
+                out var code, out var position, out TextSpan span);
 
             return AssertSmartTokenFormatterCloseBraceAsync(
                 code,
@@ -632,7 +625,7 @@ class Program
             int indentationLine,
             int expectedSpace)
         {
-            Assert.NotNull(await Record.ExceptionAsync(async () => await GetSmartTokenFormatterIndentationAsync(code, indentationLine, '{')));
+            Assert.NotNull(await Record.ExceptionAsync(() => GetSmartTokenFormatterIndentationAsync(code, indentationLine, '{')));
         }
 
         private async Task ExpectException_SmartTokenFormatterCloseBraceAsync(
@@ -640,7 +633,7 @@ class Program
             int indentationLine,
             int expectedSpace)
         {
-            Assert.NotNull(await Record.ExceptionAsync(async () => await GetSmartTokenFormatterIndentationAsync(code, indentationLine, '}')));
+            Assert.NotNull(await Record.ExceptionAsync(() => GetSmartTokenFormatterIndentationAsync(code, indentationLine, '}')));
         }
     }
 }

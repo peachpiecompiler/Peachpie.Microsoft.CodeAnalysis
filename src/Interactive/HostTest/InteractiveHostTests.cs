@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Immutable;
@@ -10,16 +10,17 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Test.Utilities;
+using Microsoft.CodeAnalysis.Editor.CSharp;
 using Microsoft.CodeAnalysis.Editor.CSharp.Interactive;
 using Microsoft.CodeAnalysis.Interactive;
 using Microsoft.CodeAnalysis.Test.Utilities;
 using Roslyn.Test.Utilities;
 using Roslyn.Utilities;
 using Xunit;
-using Traits = Roslyn.Test.Utilities.Traits;
 
 namespace Microsoft.CodeAnalysis.UnitTests.Interactive
 {
@@ -32,23 +33,23 @@ namespace Microsoft.CodeAnalysis.UnitTests.Interactive
         private SynchronizedStringWriter _synchronizedErrorOutput;
         private int[] _outputReadPosition = new int[] { 0, 0 };
 
-        private readonly InteractiveHost Host;
+        private readonly InteractiveHost _host;
 
         private static readonly string s_fxDir = FileUtilities.NormalizeDirectoryPath(RuntimeEnvironment.GetRuntimeDirectory());
         private static readonly string s_homeDir = FileUtilities.NormalizeDirectoryPath(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
 
         public InteractiveHostTests()
         {
-            Host = new InteractiveHost(typeof(CSharpReplServiceProvider), GetInteractiveHostPath(), ".", millisecondsTimeout: -1);
+            _host = new InteractiveHost(typeof(CSharpReplServiceProvider), GetInteractiveHostPath(), ".", millisecondsTimeout: -1);
 
             RedirectOutput();
 
-            Host.ResetAsync(new InteractiveHostOptions(initializationFile: null, culture: CultureInfo.InvariantCulture)).Wait();
+            _host.ResetAsync(new InteractiveHostOptions(initializationFile: null, culture: CultureInfo.InvariantCulture)).Wait();
 
-            var remoteService = Host.TryGetService();
+            var remoteService = _host.TryGetService();
             Assert.NotNull(remoteService);
 
-            Host.SetPathsAsync(new[] { s_fxDir }, new[] { s_homeDir }, s_homeDir).Wait();
+            _host.SetPathsAsync(new[] { s_fxDir }, new[] { s_homeDir }, s_homeDir).Wait();
 
             // assert and remove logo:
             var output = SplitLines(ReadOutputToEnd());
@@ -56,9 +57,9 @@ namespace Microsoft.CodeAnalysis.UnitTests.Interactive
 
             Assert.Equal("", errorOutput);
             Assert.Equal(2, output.Length);
-            Assert.Equal("Microsoft (R) Roslyn C# Compiler version " + FileVersionInfo.GetVersionInfo(Host.GetType().Assembly.Location).FileVersion, output[0]);
+            Assert.Equal(string.Format(CSharpInteractiveEditorResources.Microsoft_R_Roslyn_CSharp_Compiler_version_0, FileVersionInfo.GetVersionInfo(_host.GetType().Assembly.Location).FileVersion), output[0]);
             // "Type "#help" for more information."
-            Assert.Equal(FeaturesResources.TypeHelpForMoreInformation, output[1]);
+            Assert.Equal(FeaturesResources.Type_Sharphelp_for_more_information, output[1]);
 
             // remove logo:
             ClearOutput();
@@ -68,9 +69,9 @@ namespace Microsoft.CodeAnalysis.UnitTests.Interactive
         {
             try
             {
-                Process process = Host.TryGetProcess();
+                Process process = _host.TryGetProcess();
 
-                DisposeInteractiveHostProcess(Host);
+                DisposeInteractiveHostProcess(_host);
 
                 // the process should be terminated 
                 if (process != null && !process.HasExited)
@@ -91,8 +92,8 @@ namespace Microsoft.CodeAnalysis.UnitTests.Interactive
             _synchronizedOutput = new SynchronizedStringWriter();
             _synchronizedErrorOutput = new SynchronizedStringWriter();
             ClearOutput();
-            Host.Output = _synchronizedOutput;
-            Host.ErrorOutput = _synchronizedErrorOutput;
+            _host.Output = _synchronizedOutput;
+            _host.ErrorOutput = _synchronizedErrorOutput;
         }
 
         private bool LoadReference(string reference)
@@ -102,14 +103,14 @@ namespace Microsoft.CodeAnalysis.UnitTests.Interactive
 
         private bool Execute(string code)
         {
-            var task = Host.ExecuteAsync(code);
+            var task = _host.ExecuteAsync(code);
             task.Wait();
             return task.Result.Success;
         }
 
         private bool IsShadowCopy(string path)
         {
-            return Host.TryGetService().IsShadowCopy(path);
+            return _host.TryGetService().IsShadowCopy(path);
         }
 
         public string ReadErrorOutputToEnd()
@@ -117,18 +118,18 @@ namespace Microsoft.CodeAnalysis.UnitTests.Interactive
             return ReadOutputToEnd(isError: true);
         }
 
-        public void ClearOutput()
+        private void ClearOutput()
         {
             _outputReadPosition = new int[] { 0, 0 };
             _synchronizedOutput.Clear();
             _synchronizedErrorOutput.Clear();
         }
 
-        public void RestartHost(string rspFile = null)
+        private void RestartHost(string rspFile = null)
         {
             ClearOutput();
 
-            var initTask = Host.ResetAsync(new InteractiveHostOptions(initializationFile: rspFile, culture: CultureInfo.InvariantCulture));
+            var initTask = _host.ResetAsync(new InteractiveHostOptions(initializationFile: rspFile, culture: CultureInfo.InvariantCulture));
             initTask.Wait();
         }
 
@@ -139,7 +140,7 @@ namespace Microsoft.CodeAnalysis.UnitTests.Interactive
             var mark = markPrefix + Guid.NewGuid().ToString();
 
             // writes mark to the STDOUT/STDERR pipe in the remote process:
-            Host.TryGetService().RemoteConsoleWrite(Encoding.UTF8.GetBytes(mark), isError);
+            _host.TryGetService().RemoteConsoleWrite(Encoding.UTF8.GetBytes(mark), isError);
 
             while (true)
             {
@@ -162,7 +163,7 @@ namespace Microsoft.CodeAnalysis.UnitTests.Interactive
         private static CompiledFile CompileLibrary(TempDirectory dir, string fileName, string assemblyName, string source, params MetadataReference[] references)
         {
             var file = dir.CreateFile(fileName);
-            var compilation = CreateCompilation(
+            var compilation = CreateEmptyCompilation(
                 new[] { source },
                 assemblyName: assemblyName,
                 references: references.Concat(new[] { MetadataReference.CreateFromAssemblyInternal(typeof(object).Assembly) }),
@@ -225,17 +226,21 @@ System.Console.Error.WriteLine(""error-\u7890!"");
                 return;
             }
 
+            var process = _host.TryGetProcess();
+
             Execute(@"
-int foo(int a0, int a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8, int a9) 
+int goo(int a0, int a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8, int a9) 
 { 
-    return foo(0,1,2,3,4,5,6,7,8,9) + foo(0,1,2,3,4,5,6,7,8,9); 
+    return goo(0,1,2,3,4,5,6,7,8,9) + goo(0,1,2,3,4,5,6,7,8,9); 
 } 
-foo(0,1,2,3,4,5,6,7,8,9)
+goo(0,1,2,3,4,5,6,7,8,9)
             ");
 
             Assert.Equal("", ReadOutputToEnd());
-            // Hosting process exited with exit code -1073741571.
-            Assert.Equal("Process is terminated due to StackOverflowException.\n" + string.Format(FeaturesResources.HostingProcessExitedWithExitCode, -1073741571), ReadErrorOutputToEnd().Trim());
+
+            // Hosting process exited with exit code ###.
+            var errorOutput = ReadErrorOutputToEnd().Trim();
+            Assert.Equal("Process is terminated due to StackOverflowException.\n" + string.Format(FeaturesResources.Hosting_process_exited_with_exit_code_0, process.ExitCode), errorOutput);
 
             Execute(@"1+1");
 
@@ -243,7 +248,7 @@ foo(0,1,2,3,4,5,6,7,8,9)
         }
 
         private const string MethodWithInfiniteLoop = @"
-void foo() 
+void goo() 
 { 
     int i = 0;
     while (true) 
@@ -265,9 +270,9 @@ void foo()
         public void AsyncExecute_InfiniteLoop()
         {
             var mayTerminate = new ManualResetEvent(false);
-            Host.ErrorOutputReceived += (_, __) => mayTerminate.Set();
+            _host.ErrorOutputReceived += (_, __) => mayTerminate.Set();
 
-            var executeTask = Host.ExecuteAsync(MethodWithInfiniteLoop + "\r\nfoo()");
+            var executeTask = _host.ExecuteAsync(MethodWithInfiniteLoop + "\r\nfoo()");
             Assert.True(mayTerminate.WaitOne());
 
             RestartHost();
@@ -282,12 +287,12 @@ void foo()
         public void AsyncExecute_HangingForegroundThreads()
         {
             var mayTerminate = new ManualResetEvent(false);
-            Host.OutputReceived += (_, __) =>
+            _host.OutputReceived += (_, __) =>
             {
                 mayTerminate.Set();
             };
 
-            var executeTask = Host.ExecuteAsync(@"
+            var executeTask = _host.ExecuteAsync(@"
 using System.Threading;
 
 int i1 = 0;
@@ -316,10 +321,10 @@ while(true) {}
 
             Assert.True(mayTerminate.WaitOne());
 
-            var service = Host.TryGetService();
+            var service = _host.TryGetService();
             Assert.NotNull(service);
 
-            var process = Host.TryGetProcess();
+            var process = _host.TryGetProcess();
             Assert.NotNull(process);
 
             service.EmulateClientExit();
@@ -335,9 +340,9 @@ while(true) {}
             var file = Temp.CreateFile().WriteAllText(MethodWithInfiniteLoop + "\r\nfoo();").Path;
 
             var mayTerminate = new ManualResetEvent(false);
-            Host.ErrorOutputReceived += (_, __) => mayTerminate.Set();
+            _host.ErrorOutputReceived += (_, __) => mayTerminate.Set();
 
-            var executeTask = Host.ExecuteFileAsync(file);
+            var executeTask = _host.ExecuteFileAsync(file);
             mayTerminate.WaitOne();
 
             RestartHost();
@@ -352,7 +357,7 @@ while(true) {}
         public void AsyncExecuteFile_SourceKind()
         {
             var file = Temp.CreateFile().WriteAllText("1 1").Path;
-            var task = Host.ExecuteFileAsync(file);
+            var task = _host.ExecuteFileAsync(file);
             task.Wait();
             Assert.False(task.Result.Success);
 
@@ -362,15 +367,14 @@ while(true) {}
         }
 
         [Fact]
-        public void AsyncExecuteFile_NonExistingFile()
+        public async Task AsyncExecuteFile_NonExistingFile()
         {
-            var task = Host.ExecuteFileAsync("non existing file");
-            task.Wait();
-            Assert.False(task.Result.Success);
+            var result = await _host.ExecuteFileAsync("non existing file");
+            Assert.False(result.Success);
 
             var errorOut = ReadErrorOutputToEnd().Trim();
-            Assert.Contains(FeaturesResources.SpecifiedFileNotFound, errorOut, StringComparison.Ordinal);
-            Assert.Contains(FeaturesResources.SearchedInDirectory, errorOut, StringComparison.Ordinal);
+            Assert.Contains(FeaturesResources.Specified_file_not_found, errorOut, StringComparison.Ordinal);
+            Assert.Contains(FeaturesResources.Searched_in_directory_colon, errorOut, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -382,23 +386,23 @@ using static System.Console;
 public class C 
 { 
    public int field = 4; 
-   public int Foo(int i) { return i; } 
+   public int Goo(int i) { return i; } 
 }
 
-public int Foo(int i) { return i; }
+public int Goo(int i) { return i; }
 
 WriteLine(5);
 ").Path;
-            var task = Host.ExecuteFileAsync(file);
+            var task = _host.ExecuteFileAsync(file);
             task.Wait();
 
             Assert.True(task.Result.Success);
             Assert.Equal("5", ReadOutputToEnd().Trim());
 
-            Execute("Foo(2)");
+            Execute("Goo(2)");
             Assert.Equal("2", ReadOutputToEnd().Trim());
 
-            Execute("new C().Foo(3)");
+            Execute("new C().Goo(3)");
             Assert.Equal("3", ReadOutputToEnd().Trim());
 
             Execute("new C().field");
@@ -408,7 +412,7 @@ WriteLine(5);
         [Fact]
         public void AsyncExecuteFile_InvalidFileContent()
         {
-            var executeTask = Host.ExecuteFileAsync(typeof(Process).Assembly.Location);
+            var executeTask = _host.ExecuteFileAsync(typeof(Process).Assembly.Location);
 
             executeTask.Wait();
 
@@ -423,7 +427,7 @@ WriteLine(5);
         {
             var file = Temp.CreateFile().WriteAllText("#load blah.csx" + "\r\n" + "class C {}");
 
-            Host.ExecuteFileAsync(file.Path).Wait();
+            _host.ExecuteFileAsync(file.Path).Wait();
 
             var errorOut = ReadErrorOutputToEnd().Trim();
             Assert.True(errorOut.StartsWith(file.Path + "(1,7):", StringComparison.Ordinal), "Error output should start with file name, line and column");
@@ -438,10 +442,10 @@ WriteLine(5);
         public void UserDefinedAssemblyResolve_InfiniteLoop()
         {
             var mayTerminate = new ManualResetEvent(false);
-            Host.ErrorOutputReceived += (_, __) => mayTerminate.Set();
+            _host.ErrorOutputReceived += (_, __) => mayTerminate.Set();
 
-            Host.TryGetService().HookMaliciousAssemblyResolve();
-            var executeTask = Host.AddReferenceAsync("nonexistingassembly" + Guid.NewGuid());
+            _host.TryGetService().HookMaliciousAssemblyResolve();
+            var executeTask = _host.AddReferenceAsync("nonexistingassembly" + Guid.NewGuid());
 
             Assert.True(mayTerminate.WaitOne());
             executeTask.Wait();
@@ -487,8 +491,8 @@ WriteLine(5);
             Assert.True(LoadReference("System.Data, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089"));
             Assert.True(Execute("new System.Data.DataSet()"));
         }
-                
-        [ConditionalFact(typeof(Framework35Installed), Skip="https://github.com/dotnet/roslyn/issues/5167")]
+
+        [ConditionalFact(typeof(Framework35Installed), Skip = "https://github.com/dotnet/roslyn/issues/5167")]
         public void AddReference_VersionUnification1()
         {
             // V3.5 unifies with the current Framework version:
@@ -654,19 +658,19 @@ WriteLine(5);
             var dir = Temp.CreateDirectory();
 
             var source1 = "public class C { public int X = 1; }";
-            var c1 = CreateCompilationWithMscorlib(source1, assemblyName: "C");
+            var c1 = CreateCompilation(source1, assemblyName: "C");
             var file = dir.CreateFile("c.dll").WriteAllBytes(c1.EmitToArray());
 
             // use:
             Execute($@"
 #r ""{file.Path}""
-C foo() => new C();
+C goo() => new C();
 new C().X
 ");
 
             // update:
             var source2 = "public class D { public int Y = 2; }";
-            var c2 = CreateCompilationWithMscorlib(source2, assemblyName: "C");
+            var c2 = CreateCompilation(source2, assemblyName: "C");
             file.WriteAllBytes(c2.EmitToArray());
 
             // add the reference again:
@@ -693,11 +697,11 @@ new D().Y
             var dir2 = dir.CreateDirectory("2");
 
             var source1 = "public class C1 { }";
-            var c1 = CreateCompilationWithMscorlib(source1, assemblyName: "C");
+            var c1 = CreateCompilation(source1, assemblyName: "C");
             var file1 = dir1.CreateFile("c.dll").WriteAllBytes(c1.EmitToArray());
 
             var source2 = "public class C2 { }";
-            var c2 = CreateCompilationWithMscorlib(source2, assemblyName: "C");
+            var c2 = CreateCompilation(source2, assemblyName: "C");
             var file2 = dir2.CreateFile("c.dll").WriteAllBytes(c2.EmitToArray());
 
             Execute($@"
@@ -727,11 +731,11 @@ new D().Y
             var dir2 = dir.CreateDirectory("2");
 
             var source1 = @"[assembly: System.Reflection.AssemblyVersion(""1.0.0.0"")] public class C1 { }";
-            var c1 = CreateCompilationWithMscorlib(source1, assemblyName: "C");
+            var c1 = CreateCompilation(source1, assemblyName: "C");
             var file1 = dir1.CreateFile("c.dll").WriteAllBytes(c1.EmitToArray());
 
             var source2 = @"[assembly: System.Reflection.AssemblyVersion(""2.0.0.0"")] public class C2 { }";
-            var c2 = CreateCompilationWithMscorlib(source2, assemblyName: "C");
+            var c2 = CreateCompilation(source2, assemblyName: "C");
             var file2 = dir2.CreateFile("c.dll").WriteAllBytes(c2.EmitToArray());
 
             Execute($@"
@@ -839,7 +843,7 @@ new D().Y
             var rspFile = Temp.CreateFile();
             rspFile.WriteAllText("/lib:" + directory.Path);
 
-            Host.ResetAsync(new InteractiveHostOptions(initializationFile: rspFile.Path, culture: CultureInfo.InvariantCulture)).Wait();
+            _host.ResetAsync(new InteractiveHostOptions(initializationFile: rspFile.Path, culture: CultureInfo.InvariantCulture)).Wait();
 
             Execute(
 $@"#r ""{assemblyName}.dll""
@@ -849,7 +853,7 @@ typeof(C).Assembly.GetName()");
 
             var output = SplitLines(ReadOutputToEnd());
             Assert.Equal(2, output.Length);
-            Assert.Equal("Loading context from '" + Path.GetFileName(rspFile.Path) + "'.", output[0]);
+            Assert.Equal($"{ string.Format(FeaturesResources.Loading_context_from_0, Path.GetFileName(rspFile.Path)) }", output[0]);
             Assert.Equal($"[{assemblyName}, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null]", output[1]);
         }
 
@@ -871,7 +875,7 @@ typeof(C).Assembly.GetName()");
 /u:System.Text
 /u:System.Threading.Tasks
 ");
-            Host.ResetAsync(new InteractiveHostOptions(initializationFile: rspFile.Path, culture: CultureInfo.InvariantCulture)).Wait();
+            _host.ResetAsync(new InteractiveHostOptions(initializationFile: rspFile.Path, culture: CultureInfo.InvariantCulture)).Wait();
 
             Execute(@"
 dynamic d = new ExpandoObject();
@@ -902,7 +906,7 @@ Console.Write(""OK"")
             AssertEx.AssertEqualToleratingWhitespaceDifferences("", ReadErrorOutputToEnd());
 
             AssertEx.AssertEqualToleratingWhitespaceDifferences(
-$@"Loading context from '{Path.GetFileName(rspFile.Path)}'.
+$@"{ string.Format(FeaturesResources.Loading_context_from_0, Path.GetFileName(rspFile.Path)) } 
 OK
 ", ReadOutputToEnd());
         }
@@ -920,16 +924,16 @@ OK
 {initFile.Path}
 ");
 
-            Host.ResetAsync(new InteractiveHostOptions(initializationFile: rspFile.Path, culture: CultureInfo.InvariantCulture)).Wait();
+            _host.ResetAsync(new InteractiveHostOptions(initializationFile: rspFile.Path, culture: CultureInfo.InvariantCulture)).Wait();
 
             Execute("new Process()");
 
             AssertEx.AssertEqualToleratingWhitespaceDifferences($@"
-{initFile.Path}(1,3): error CS1002: ; expected
+{initFile.Path}(1,3): error CS1002: { CSharpResources.ERR_SemicolonExpected }
 ", ReadErrorOutputToEnd());
 
             AssertEx.AssertEqualToleratingWhitespaceDifferences($@"
-Loading context from '{Path.GetFileName(rspFile.Path)}'.
+{ string.Format(FeaturesResources.Loading_context_from_0, Path.GetFileName(rspFile.Path)) }
 [System.Diagnostics.Process]
 ", ReadOutputToEnd());
         }
@@ -946,12 +950,12 @@ a
 b
 c
 ");
-            Host.ResetAsync(new InteractiveHostOptions(initializationFile: rspFile.Path, culture: CultureInfo.InvariantCulture)).Wait();
+            _host.ResetAsync(new InteractiveHostOptions(initializationFile: rspFile.Path, culture: CultureInfo.InvariantCulture)).Wait();
 
             Assert.Equal("", ReadErrorOutputToEnd());
 
             AssertEx.AssertEqualToleratingWhitespaceDifferences(
-$@"Loading context from '{Path.GetFileName(rspFile.Path)}'.
+$@"{ string.Format(FeaturesResources.Loading_context_from_0, Path.GetFileName(rspFile.Path)) }
 ""a""
 ""b""
 ""c""
@@ -982,8 +986,8 @@ WriteLine(new Complex(2, 6).Real);
         {
             Execute("nameof(Microsoft.CodeAnalysis)");
 
-            AssertEx.AssertEqualToleratingWhitespaceDifferences(@"
-(1,8): error CS0234: The type or namespace name 'CodeAnalysis' does not exist in the namespace 'Microsoft' (are you missing an assembly reference?)",
+            AssertEx.AssertEqualToleratingWhitespaceDifferences($@"
+(1,8): error CS0234: { string.Format(CSharpResources.ERR_DottedTypeNameNotFoundInNS, "CodeAnalysis", "Microsoft") }",
                 ReadErrorOutputToEnd());
 
             Assert.Equal("", ReadOutputToEnd());
@@ -1052,38 +1056,38 @@ new object[] { new Class1(), new Class2(), new Class3() }
             var dll = Temp.CreateFile(extension: ".dll").WriteAllBytes(TestResources.MetadataTests.InterfaceAndClass.CSInterfaces01);
             var srcDir = Temp.CreateDirectory();
             var dllDir = Path.GetDirectoryName(dll.Path);
-            srcDir.CreateFile("foo.csx").WriteAllText("ReferencePaths.Add(@\"" + dllDir + "\");");
+            srcDir.CreateFile("goo.csx").WriteAllText("ReferencePaths.Add(@\"" + dllDir + "\");");
 
-            Func<string, string> normalizeSeparatorsAndFrameworkFolders = (s) => s.Replace("\\", "\\\\").Replace("Framework64", "Framework");
+            string normalizeSeparatorsAndFrameworkFolders(string s) => s.Replace("\\", "\\\\").Replace("Framework64", "Framework");
 
             // print default:
-            Host.ExecuteAsync(@"ReferencePaths").Wait();
+            _host.ExecuteAsync(@"ReferencePaths").Wait();
             var output = ReadOutputToEnd();
             Assert.Equal("SearchPaths { \"" + normalizeSeparatorsAndFrameworkFolders(string.Join("\", \"", new[] { s_fxDir })) + "\" }\r\n", output);
 
-            Host.ExecuteAsync(@"SourcePaths").Wait();
+            _host.ExecuteAsync(@"SourcePaths").Wait();
             output = ReadOutputToEnd();
             Assert.Equal("SearchPaths { \"" + normalizeSeparatorsAndFrameworkFolders(string.Join("\", \"", new[] { s_homeDir })) + "\" }\r\n", output);
 
             // add and test if added:
-            Host.ExecuteAsync("SourcePaths.Add(@\"" + srcDir + "\");").Wait();
+            _host.ExecuteAsync("SourcePaths.Add(@\"" + srcDir + "\");").Wait();
 
-            Host.ExecuteAsync(@"SourcePaths").Wait();
+            _host.ExecuteAsync(@"SourcePaths").Wait();
 
             output = ReadOutputToEnd();
             Assert.Equal("SearchPaths { \"" + normalizeSeparatorsAndFrameworkFolders(string.Join("\", \"", new[] { s_homeDir, srcDir.Path })) + "\" }\r\n", output);
 
             // execute file (uses modified search paths), the file adds a reference path
-            Host.ExecuteFileAsync("foo.csx").Wait();
+            _host.ExecuteFileAsync("goo.csx").Wait();
 
-            Host.ExecuteAsync(@"ReferencePaths").Wait();
+            _host.ExecuteAsync(@"ReferencePaths").Wait();
 
             output = ReadOutputToEnd();
             Assert.Equal("SearchPaths { \"" + normalizeSeparatorsAndFrameworkFolders(string.Join("\", \"", new[] { s_fxDir, dllDir })) + "\" }\r\n", output);
 
-            Host.AddReferenceAsync(Path.GetFileName(dll.Path)).Wait();
+            _host.AddReferenceAsync(Path.GetFileName(dll.Path)).Wait();
 
-            Host.ExecuteAsync(@"typeof(Metadata.ICSProp)").Wait();
+            _host.ExecuteAsync(@"typeof(Metadata.ICSProp)").Wait();
 
             var error = ReadErrorOutputToEnd();
             Assert.Equal("", error);
@@ -1130,7 +1134,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 Console.Write(Task.Run(() => { Thread.CurrentThread.Join(100); return 42; }).ContinueWith(t => t.Result).Result)");
-            
+
             var output = ReadOutputToEnd();
             var error = ReadErrorOutputToEnd();
 
@@ -1149,6 +1153,20 @@ Console.Write(Task.Run(() => { Thread.CurrentThread.Join(100); return 42; }).Con
             Assert.Equal("", output);
             Assert.DoesNotContain("Unexpected", error, StringComparison.OrdinalIgnoreCase);
             Assert.True(error.StartsWith(new Exception().Message));
+        }
+
+        [Fact, WorkItem(10883, "https://github.com/dotnet/roslyn/issues/10883")]
+        public void PreservingDeclarationsOnException()
+        {
+            Execute(@"int i = 100;");
+            Execute(@"int j = 20; throw new System.Exception(""Bang!""); int k = 3;");
+            Execute(@"i + j + k");
+
+            var output = ReadOutputToEnd();
+            var error = ReadErrorOutputToEnd();
+
+            AssertEx.AssertEqualToleratingWhitespaceDifferences("120", output);
+            AssertEx.AssertEqualToleratingWhitespaceDifferences("Bang!", error);
         }
 
         #region Submission result printing - null/void/value.
@@ -1175,8 +1193,8 @@ s
             Assert.Equal("2\r\n", output);
 
             Execute(@"
-void foo() { } 
-foo()
+void goo() { } 
+goo()
 ");
 
             output = ReadOutputToEnd();

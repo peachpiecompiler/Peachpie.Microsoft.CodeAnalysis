@@ -1,21 +1,10 @@
-' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
-Imports System
-Imports System.Collections.Generic
-Imports System.Linq
-Imports System.Text
-Imports System.Threading
-Imports System.Threading.Tasks
+Imports Microsoft.CodeAnalysis.Editor.Commanding.Commands
 Imports Microsoft.CodeAnalysis.Editor.Implementation.Interactive
 Imports Microsoft.CodeAnalysis.Editor.Implementation.Organizing
 Imports Microsoft.CodeAnalysis.Editor.UnitTests
 Imports Microsoft.CodeAnalysis.Editor.UnitTests.Workspaces
-Imports Microsoft.CodeAnalysis.Text
-Imports Microsoft.CodeAnalysis.VisualBasic.Syntax.InternalSyntax
-Imports Roslyn.Test.EditorUtilities
-Imports Roslyn.Test.Utilities
-Imports Xunit
-Imports ParseOptions = Microsoft.CodeAnalysis.VisualBasic.VisualBasicParseOptions
 
 Namespace Microsoft.CodeAnalysis.Editor.VisualBasic.UnitTests.Organizing
     Public Class OrganizeTypeDeclarationTests
@@ -205,7 +194,7 @@ end class</element>
         End Sub
         Shared Friend Function Bar() As Integer
         End Function
-        Shared Private Function Foo() As Integer
+        Shared Private Function Goo() As Integer
         End Function
         Function Goo() As Integer
         End Function  
@@ -215,7 +204,7 @@ End class</element>
 
             Dim final =
     <element>class C 
-        Shared Private Function Foo() As Integer
+        Shared Private Function Goo() As Integer
         End Function
         Shared Public Sub Main(args As String())
         End Sub
@@ -919,7 +908,7 @@ end class</element>
         Public Async Function TestBug2592() As Task
             Dim initial =
 <element>Namespace Acme
-    Public Class Foo
+    Public Class Goo
         
         
         Shared Public Sub Main(args As String())
@@ -932,7 +921,7 @@ End Namespace</element>
 
             Dim final =
 <element>Namespace Acme
-    Public Class Foo
+    Public Class Goo
         
         
         Public Shared Function Bar() As Integer
@@ -948,15 +937,16 @@ End Namespace</element>
         <WpfFact>
         <Trait(Traits.Feature, Traits.Features.Organizing)>
         <Trait(Traits.Feature, Traits.Features.Interactive)>
-        Public Async Function TestOrganizingCommandsDisabledInSubmission() As Task
-            Dim exportProvider = MinimalTestExportProvider.CreateExportProvider(
-                TestExportProvider.EntireAssemblyCatalogWithCSharpAndVisualBasic.WithParts(GetType(InteractiveDocumentSupportsFeatureService)))
+        Public Sub TestOrganizingCommandsDisabledInSubmission()
+            Dim exportProvider = ExportProviderCache _
+                .GetOrCreateExportProviderFactory(TestExportProvider.EntireAssemblyCatalogWithCSharpAndVisualBasic.WithParts(GetType(InteractiveDocumentSupportsFeatureService))) _
+                .CreateExportProvider()
 
-            Using workspace = Await TestWorkspace.CreateAsync(
+            Using workspace = TestWorkspace.Create(
                 <Workspace>
                     <Submission Language="Visual Basic" CommonReferences="true">  
                         Class C
-                            Private $foo As Object
+                            Private $goo As Object
                         End Class
                     </Submission>
                 </Workspace>,
@@ -968,33 +958,14 @@ End Namespace</element>
 
                 Dim textView = workspace.Documents.Single().GetTextView()
 
-                Dim handler = New OrganizeDocumentCommandHandler(workspace.GetService(Of Host.IWaitIndicator))
-                Dim delegatedToNext = False
-                Dim nextHandler =
-                    Function()
-                        delegatedToNext = True
-                        Return CommandState.Unavailable
-                    End Function
+                Dim handler = New OrganizeDocumentCommandHandler()
 
-                Dim state = handler.GetCommandState(New Commands.SortImportsCommandArgs(textView, textView.TextBuffer), nextHandler)
-                Assert.True(delegatedToNext)
-                Assert.False(state.IsAvailable)
+                Dim state = handler.GetCommandState(New SortAndRemoveUnnecessaryImportsCommandArgs(textView, textView.TextBuffer))
+                Assert.True(state.IsUnspecified)
 
-                delegatedToNext = False
-                state = handler.GetCommandState(New Commands.SortAndRemoveUnnecessaryImportsCommandArgs(textView, textView.TextBuffer), nextHandler)
-                Assert.True(delegatedToNext)
-                Assert.False(state.IsAvailable)
-
-                delegatedToNext = False
-                state = handler.GetCommandState(New Commands.RemoveUnnecessaryImportsCommandArgs(textView, textView.TextBuffer), nextHandler)
-                Assert.True(delegatedToNext)
-                Assert.False(state.IsAvailable)
-
-                delegatedToNext = False
-                state = handler.GetCommandState(New Commands.OrganizeDocumentCommandArgs(textView, textView.TextBuffer), nextHandler)
-                Assert.True(delegatedToNext)
-                Assert.False(state.IsAvailable)
+                state = handler.GetCommandState(New OrganizeDocumentCommandArgs(textView, textView.TextBuffer))
+                Assert.True(state.IsUnspecified)
             End Using
-        End Function
+        End Sub
     End Class
 End Namespace

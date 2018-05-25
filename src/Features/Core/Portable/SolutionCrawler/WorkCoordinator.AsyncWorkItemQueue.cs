@@ -1,10 +1,11 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.CodeAnalysis.Diagnostics;
 using Roslyn.Utilities;
 
 namespace Microsoft.CodeAnalysis.SolutionCrawler
@@ -18,16 +19,20 @@ namespace Microsoft.CodeAnalysis.SolutionCrawler
             {
                 private readonly object _gate;
                 private readonly SemaphoreSlim _semaphore;
+
+                private readonly Workspace _workspace;
                 private readonly SolutionCrawlerProgressReporter _progressReporter;
 
                 // map containing cancellation source for the item given out.
                 private readonly Dictionary<object, CancellationTokenSource> _cancellationMap;
 
-                public AsyncWorkItemQueue(SolutionCrawlerProgressReporter progressReporter)
+                public AsyncWorkItemQueue(SolutionCrawlerProgressReporter progressReporter, Workspace workspace)
                 {
                     _gate = new object();
                     _semaphore = new SemaphoreSlim(initialCount: 0);
                     _cancellationMap = new Dictionary<object, CancellationTokenSource>();
+
+                    _workspace = workspace;
                     _progressReporter = progressReporter;
                 }
 
@@ -39,7 +44,7 @@ namespace Microsoft.CodeAnalysis.SolutionCrawler
 
                 protected abstract bool TryTake_NoLock(TKey key, out WorkItem workInfo);
 
-                protected abstract bool TryTakeAnyWork_NoLock(ProjectId preferableProjectId, ProjectDependencyGraph dependencyGraph, out WorkItem workItem);
+                protected abstract bool TryTakeAnyWork_NoLock(ProjectId preferableProjectId, ProjectDependencyGraph dependencyGraph, IDiagnosticAnalyzerService service, out WorkItem workItem);
 
                 public bool HasAnyWork
                 {
@@ -52,17 +57,6 @@ namespace Microsoft.CodeAnalysis.SolutionCrawler
                     }
                 }
 
-                public void RemoveCancellationSource(object key)
-                {
-                    lock (_gate)
-                    {
-                        // just remove cancellation token from the map.
-                        // the cancellation token might be passed out to other service
-                        // so don't call cancel on the source only because we are done using it.
-                        _cancellationMap.Remove(key);
-                    }
-                }
-
                 public virtual Task WaitAsync(CancellationToken cancellationToken)
                 {
                     return _semaphore.WaitAsync(cancellationToken);
@@ -70,22 +64,47 @@ namespace Microsoft.CodeAnalysis.SolutionCrawler
 
                 public bool AddOrReplace(WorkItem item)
                 {
-                    if (!HasAnyWork)
-                    {
-                        // first work is added.
-                        _progressReporter.Start();
-                    }
-
                     lock (_gate)
                     {
                         if (AddOrReplace_NoLock(item))
                         {
+                            // the item is new item that got added to the queue.
+                            // let solution crawler progress report to know about new item enqueued.
+                            // progress reporter will take care of nested/overlapped works by itself
+                            // 
+                            // order of events is as follow
+                            // 1. first item added by AddOrReplace which is the point where progress start.
+                            // 2. bunch of other items added or replaced (workitem in the queue > 0)
+                            // 3. items start dequeued to be processed by TryTake or TryTakeAnyWork
+                            // 4. once item is done processed, it is marked as done by MarkWorkItemDoneFor
+                            // 5. all items in the queue are dequeued (workitem in the queue == 0) 
+                            //    but there can be still work in progress
+                            // 6. all works are considered done when last item is marked done by MarkWorkItemDoneFor
+                            //    and at the point, we will set progress to stop.
+                            _progressReporter.Start();
+
                             // increase count 
                             _semaphore.Release();
                             return true;
                         }
 
                         return false;
+                    }
+                }
+
+                public void MarkWorkItemDoneFor(object key)
+                {
+                    lock (_gate)
+                    {
+                        // just remove cancellation token from the map.
+                        // the cancellation token might be passed out to other service
+                        // so don't call cancel on the source only because we are done using it.
+                        _cancellationMap.Remove(key);
+
+                        // every works enqueued by "AddOrReplace" will be processed
+                        // at some point, and when it is processed, this method will be called to mark
+                        // work has been done.
+                        _progressReporter.Stop();
                     }
                 }
 
@@ -117,6 +136,9 @@ namespace Microsoft.CodeAnalysis.SolutionCrawler
                     RaiseCancellation_NoLock(cancellations);
                 }
 
+                private bool HasAnyWork_NoLock => WorkItemCount_NoLock > 0;
+                protected Workspace Workspace => _workspace;
+
                 private static void RaiseCancellation_NoLock(List<CancellationTokenSource> cancellations)
                 {
                     if (cancellations == null)
@@ -126,14 +148,6 @@ namespace Microsoft.CodeAnalysis.SolutionCrawler
 
                     // cancel can cause outer code to be run inlined, run it outside of the lock.
                     cancellations.Do(s => s.Cancel());
-                }
-
-                private bool HasAnyWork_NoLock
-                {
-                    get
-                    {
-                        return WorkItemCount_NoLock > 0;
-                    }
                 }
 
                 private List<CancellationTokenSource> CancelAll_NoLock()
@@ -155,8 +169,7 @@ namespace Microsoft.CodeAnalysis.SolutionCrawler
 
                 protected void Cancel_NoLock(object key)
                 {
-                    CancellationTokenSource source;
-                    if (_cancellationMap.TryGetValue(key, out source))
+                    if (_cancellationMap.TryGetValue(key, out var source))
                     {
                         source.Cancel();
                         _cancellationMap.Remove(key);
@@ -169,12 +182,6 @@ namespace Microsoft.CodeAnalysis.SolutionCrawler
                     {
                         if (TryTake_NoLock(key, out workInfo))
                         {
-                            if (!HasAnyWork_NoLock)
-                            {
-                                // last work is done.
-                                _progressReporter.Stop();
-                            }
-
                             source = GetNewCancellationSource_NoLock(key);
                             workInfo.AsyncToken.Dispose();
                             return true;
@@ -187,19 +194,17 @@ namespace Microsoft.CodeAnalysis.SolutionCrawler
                     }
                 }
 
-                public bool TryTakeAnyWork(ProjectId preferableProjectId, ProjectDependencyGraph dependencyGraph, out WorkItem workItem, out CancellationTokenSource source)
+                public bool TryTakeAnyWork(
+                    ProjectId preferableProjectId,
+                    ProjectDependencyGraph dependencyGraph,
+                    IDiagnosticAnalyzerService analyzerService,
+                    out WorkItem workItem, out CancellationTokenSource source)
                 {
                     lock (_gate)
                     {
                         // there must be at least one item in the map when this is called unless host is shutting down.
-                        if (TryTakeAnyWork_NoLock(preferableProjectId, dependencyGraph, out workItem))
+                        if (TryTakeAnyWork_NoLock(preferableProjectId, dependencyGraph, analyzerService, out workItem))
                         {
-                            if (!HasAnyWork_NoLock)
-                            {
-                                // last work is done.
-                                _progressReporter.Stop();
-                            }
-
                             source = GetNewCancellationSource_NoLock(workItem.Key);
                             workItem.AsyncToken.Dispose();
                             return true;
@@ -220,6 +225,46 @@ namespace Microsoft.CodeAnalysis.SolutionCrawler
                     _cancellationMap.Add(key, source);
 
                     return source;
+                }
+
+                protected ProjectId GetBestProjectId_NoLock<T>(
+                    Dictionary<ProjectId, T> workQueue, ProjectId projectId,
+                    ProjectDependencyGraph dependencyGraph, IDiagnosticAnalyzerService analyzerService)
+                {
+                    if (projectId != null)
+                    {
+                        if (workQueue.ContainsKey(projectId))
+                        {
+                            return projectId;
+                        }
+
+                        // prefer project that directly depends on the given project and has diagnostics as next project to
+                        // process
+                        foreach (var dependingProjectId in dependencyGraph.GetProjectsThatDirectlyDependOnThisProject(projectId))
+                        {
+                            if (workQueue.ContainsKey(dependingProjectId) && analyzerService?.ContainsDiagnostics(Workspace, dependingProjectId) == true)
+                            {
+                                return dependingProjectId;
+                            }
+                        }
+                    }
+
+                    // prefer a project that has diagnostics as next project to process.
+                    foreach (var pendingProjectId in workQueue.Keys)
+                    {
+                        if (analyzerService?.ContainsDiagnostics(Workspace, pendingProjectId) == true)
+                        {
+                            return pendingProjectId;
+                        }
+                    }
+
+                    // explicitly iterate so that we can use struct enumerator
+                    foreach (var pair in workQueue)
+                    {
+                        return pair.Key;
+                    }
+
+                    return Contract.FailWithReturn<ProjectId>("Shouldn't reach here");
                 }
             }
         }

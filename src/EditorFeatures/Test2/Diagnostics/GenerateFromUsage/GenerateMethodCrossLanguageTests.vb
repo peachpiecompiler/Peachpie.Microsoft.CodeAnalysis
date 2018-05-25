@@ -1,26 +1,30 @@
-' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 Imports System.Threading.Tasks
 Imports Microsoft.CodeAnalysis.CodeFixes
 Imports Microsoft.CodeAnalysis.Diagnostics
+Imports Xunit.Abstractions
 
 Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Diagnostics.GenerateMethod
     Partial Public Class GenerateMethodCrossLanguageTests
         Inherits AbstractCrossLanguageUserDiagnosticTest
 
-        Friend Overrides Function CreateDiagnosticProviderAndFixer(workspace As Workspace, language As String) As Tuple(Of DiagnosticAnalyzer, CodeFixProvider)
+        Private ReadOnly _outputHelper As ITestOutputHelper
+
+        Public Sub New(outputHelper As ITestOutputHelper)
+            _outputHelper = outputHelper
+        End Sub
+
+        Friend Overrides Function CreateDiagnosticProviderAndFixer(workspace As Workspace, language As String) As (DiagnosticAnalyzer, CodeFixProvider)
             If language = LanguageNames.CSharp Then
-                Return Tuple.Create(Of DiagnosticAnalyzer, CodeFixProvider)(
-                    Nothing,
-                    New CodeAnalysis.CSharp.CodeFixes.GenerateMethod.GenerateMethodCodeFixProvider())
+                Return (Nothing, New CodeAnalysis.CSharp.CodeFixes.GenerateMethod.GenerateMethodCodeFixProvider())
             Else
-                Return Tuple.Create(Of DiagnosticAnalyzer, CodeFixProvider)(
-                    Nothing,
-                    New CodeAnalysis.VisualBasic.CodeFixes.GenerateMethod.GenerateParameterizedMemberCodeFixProvider())
+                Return (Nothing, New CodeAnalysis.VisualBasic.CodeFixes.GenerateMethod.GenerateParameterizedMemberCodeFixProvider())
             End If
         End Function
 
-        <Fact, Trait(Traits.Feature, Traits.Features.CodeActionsGenerateMethod)>
+        <Fact(Skip:="https://github.com/dotnet/roslyn/issues/9412")>
+        <Trait(Traits.Feature, Traits.Features.CodeActionsGenerateMethod)>
         Public Async Function TestSimpleInstanceMethod_CSharpToVisualBasic() As System.Threading.Tasks.Task
             Dim input =
         <Workspace>
@@ -29,7 +33,7 @@ Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Diagnostics.GenerateMethod
                 <Document>
                     public class CSClass
                     {
-                        public void Foo()
+                        public void Goo()
                         {
                             VBClass v;
                             v.$$Bar();
@@ -55,7 +59,7 @@ public class VBClass
 end class
                 </text>.Value.Trim()
 
-            Await TestAsync(input, expected)
+            Await TestAsync(input, expected, onAfterWorkspaceCreated:=Sub(w) w.SetTestLogger(AddressOf _outputHelper.WriteLine))
         End Function
 
         <Fact, Trait(Traits.Feature, Traits.Features.CodeActionsGenerateMethod)>
@@ -67,7 +71,7 @@ end class
                 <Document>
                     public class CSClass
                     {
-                        public void Foo()
+                        public void Goo()
                         {
                             VBClass.$$Bar();
                         }
@@ -92,7 +96,7 @@ public class VBClass
 end class
                 </text>.Value.Trim()
 
-            Await TestAsync(input, expected)
+            Await TestAsync(input, expected, onAfterWorkspaceCreated:=Sub(w) w.SetTestLogger(AddressOf _outputHelper.WriteLine))
         End Function
 
         <Fact, Trait(Traits.Feature, Traits.Features.CodeActionsGenerateMethod)>
@@ -104,7 +108,7 @@ end class
                 <Document>
                     public class CSClass
                     {
-                        public void Foo()
+                        public void Goo()
                         {
                             VBClass v;
                             int i;
@@ -134,7 +138,7 @@ public class VBClass
 end class
                 </text>.Value.Trim()
 
-            Await TestAsync(input, expected)
+            Await TestAsync(input, expected, onAfterWorkspaceCreated:=Sub(w) w.SetTestLogger(AddressOf _outputHelper.WriteLine))
         End Function
 
         <Fact, Trait(Traits.Feature, Traits.Features.CodeActionsGenerateMethod)>
@@ -146,7 +150,7 @@ end class
                 <Document>
                     public class CSClass : IVBInterface
                     {
-                        bool IVBInterface.$$Foo(string s)
+                        bool IVBInterface.$$Goo(string s)
                         {
                         }
                     }
@@ -164,11 +168,11 @@ end class
             Dim expected =
                 <text>
                     public interface IVBInterface
-                        Function Foo(s As String) As Boolean
+                        Function Goo(s As String) As Boolean
                     end interface
                 </text>.Value.Trim()
 
-            Await TestAsync(input, expected)
+            Await TestAsync(input, expected, onAfterWorkspaceCreated:=Sub(w) w.SetTestLogger(AddressOf _outputHelper.WriteLine))
         End Function
 
         <Fact, Trait(Traits.Feature, Traits.Features.CodeActionsGenerateMethod)>
@@ -181,7 +185,7 @@ end class
                     using System;
                     public class CSClass
                     {
-                        void Foo()
+                        void Goo()
                         {
                             Bar(VBClass.$$Method)
                         }
@@ -210,7 +214,7 @@ end class
                     end class
                 </text>.Value.Trim()
 
-            Await TestAsync(input, expected)
+            Await TestAsync(input, expected, onAfterWorkspaceCreated:=Sub(w) w.SetTestLogger(AddressOf _outputHelper.WriteLine))
         End Function
 
         <Fact, Trait(Traits.Feature, Traits.Features.CodeActionsGenerateMethod)>
@@ -222,7 +226,7 @@ end class
                 <Document>
                     public class CSClass
                     {
-                        public void Foo()
+                        public void Goo()
                         {
                             VBClass v;
                             v.$$Bar();
@@ -257,7 +261,7 @@ end class
                 <ProjectReference>CSAssembly1</ProjectReference>
                 <Document>
                     public class VBClass
-                        public sub Foo()
+                        public sub Goo()
                             dim v as CSClass
                             v.$$Bar()
                         end sub
@@ -285,7 +289,7 @@ end class
                     }
                 </text>.Value.Trim()
 
-            Await TestAsync(input, expected)
+            Await TestAsync(input, expected, onAfterWorkspaceCreated:=Sub(w) w.SetTestLogger(AddressOf _outputHelper.WriteLine))
         End Function
 
         <Fact, Trait(Traits.Feature, Traits.Features.CodeActionsGenerateMethod)>
@@ -297,7 +301,7 @@ end class
                 <Document>
                     public class CSClass
                     {
-                        public void Foo()
+                        public void Goo()
                         {
                             VBClass.Inner v;
                             v.$$Bar();
@@ -326,7 +330,7 @@ end class
                     end class
                 </text>.Value.Trim()
 
-            Await TestAsync(input, expected)
+            Await TestAsync(input, expected, onAfterWorkspaceCreated:=Sub(w) w.SetTestLogger(AddressOf _outputHelper.WriteLine))
         End Function
 
         <Fact, Trait(Traits.Feature, Traits.Features.CodeActionsGenerateMethod)>
@@ -338,7 +342,7 @@ end class
                 <Document><![CDATA[
                     public class CSClass
                     {
-                        public void Foo()
+                        public void Goo()
                         {
                             VBClass<string>.Inner<int> v;
                             v.$$Bar();
@@ -367,7 +371,7 @@ end class
     end class
                 </text>.Value.Trim()
 
-            Await TestAsync(input, expected)
+            Await TestAsync(input, expected, onAfterWorkspaceCreated:=Sub(w) w.SetTestLogger(AddressOf _outputHelper.WriteLine))
         End Function
 
         <Fact, Trait(Traits.Feature, Traits.Features.CodeActionsGenerateMethod)>
@@ -378,7 +382,7 @@ end class
                 <ProjectReference>CSAssembly1</ProjectReference>
                 <Document>
                     public class VBClass
-                        public sub Foo()
+                        public sub Goo()
                             dim v as CSClass.Inner
                             v.$$Bar()
                         end sub
@@ -412,7 +416,7 @@ end class
                     }
                 </text>.Value.Trim()
 
-            Await TestAsync(input, expected)
+            Await TestAsync(input, expected, onAfterWorkspaceCreated:=Sub(w) w.SetTestLogger(AddressOf _outputHelper.WriteLine))
         End Function
 
         <Fact, Trait(Traits.Feature, Traits.Features.CodeActionsGenerateMethod)>
@@ -423,7 +427,7 @@ end class
                 <ProjectReference>CSAssembly1</ProjectReference>
                 <Document>
                     public class VBClass
-                        public sub Foo()
+                        public sub Goo()
                             dim v as CSClass(of Integer).Inner(of String)
                             v.$$Bar()
                         end sub
@@ -457,7 +461,7 @@ end class
                     }]]>
                 </text>.Value.Trim()
 
-            Await TestAsync(input, expected)
+            Await TestAsync(input, expected, onAfterWorkspaceCreated:=Sub(w) w.SetTestLogger(AddressOf _outputHelper.WriteLine))
         End Function
 
         <WorkItem(608827, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/608827")>
@@ -471,7 +475,7 @@ end class
 Module Program
     Sub Main(args As String())
         Dim list = New List(Of String)
-        list.AddRange($$foo())
+        list.AddRange1($$goo())
     End Sub
 End Module
                 </Document>
@@ -485,7 +489,7 @@ using System.Threading.Tasks;
  
 public static class extensions
 {
-    public static void AddRange<T, U>(this List<T> list, MyStruct<U> items) where U : T
+    public static void AddRange1<T, U>(this List<T> list, MyStruct<U> items) where U : T
     {
     }
 }
@@ -503,16 +507,16 @@ public struct MyStruct<T>
 Module Program
     Sub Main(args As String())
         Dim list = New List(Of String)
-        list.AddRange(foo())
+        list.AddRange1(goo())
     End Sub
 
-    Private Function foo() As MyStruct(Of String)
+    Private Function goo() As MyStruct(Of String)
         Throw New NotImplementedException()
     End Function
 End Module]]>
                 </text>.Value.Trim()
 
-            Await TestAsync(input, expected)
+            Await TestAsync(input, expected, onAfterWorkspaceCreated:=Sub(w) w.SetTestLogger(AddressOf _outputHelper.WriteLine))
         End Function
 
         <WorkItem(608827, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/608827")>
@@ -526,7 +530,7 @@ End Module]]>
 Module Program
     Sub Main(args As String())
         Dim list = New List(Of String)
-        list.AddRange($$foo())
+        list.AddRange1($$goo())
     End Sub
 End Module
                 </Document>
@@ -540,7 +544,7 @@ using System.Threading.Tasks;
 
 public static class extensions
 {
-    public static void AddRange<T, U>(this List<T> list, MyStruct<U> items) where U : AAA, BBB
+    public static void AddRange1<T, U>(this List<T> list, MyStruct<U> items) where U : AAA, BBB
     {
     }
 }
@@ -573,16 +577,16 @@ public class CCC : AAA, BBB
 Module Program
     Sub Main(args As String())
         Dim list = New List(Of String)
-        list.AddRange(foo())
+        list.AddRange1(goo())
     End Sub
 
-    Private Function foo() As MyStruct(Of CCC)
+    Private Function goo() As MyStruct(Of CCC)
         Throw New NotImplementedException()
     End Function
 End Module]]>
                 </text>.Value.Trim()
 
-            Await TestAsync(input, expected)
+            Await TestAsync(input, expected, onAfterWorkspaceCreated:=Sub(w) w.SetTestLogger(AddressOf _outputHelper.WriteLine))
         End Function
 
         <WorkItem(608827, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/608827")>
@@ -596,7 +600,7 @@ End Module]]>
 Module Program
     Sub Main(args As String())
         Dim list = New List(Of String)
-        list.AddRange($$foo())
+        list.AddRange1($$goo())
     End Sub
 End Module
                 </Document>
@@ -610,7 +614,7 @@ using System.Threading.Tasks;
 
 public static class extensions
 {
-    public static void AddRange<T, U>(this List<T> list, MyStruct<U> items) where U : AAA, BBB
+    public static void AddRange1<T, U>(this List<T> list, MyStruct<U> items) where U : AAA, BBB
     {
     }
 }
@@ -643,16 +647,16 @@ public class CCC : AAA, BBB
 Module Program
     Sub Main(args As String())
         Dim list = New List(Of String)
-        list.AddRange(foo())
+        list.AddRange1(goo())
     End Sub
 
-    Private Function foo() As MyStruct(Of CCC)
+    Private Function goo() As MyStruct(Of CCC)
         Throw New NotImplementedException()
     End Function
 End Module]]>
                 </text>.Value.Trim()
 
-            Await TestAsync(input, expected)
+            Await TestAsync(input, expected, onAfterWorkspaceCreated:=Sub(w) w.SetTestLogger(AddressOf _outputHelper.WriteLine))
         End Function
 
         <WorkItem(608827, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/608827")>
@@ -666,7 +670,7 @@ End Module]]>
 Module Program
     Sub Main(args As String())
         Dim list = New List(Of String)
-        list.AddRange($$foo())
+        list.AddRange1($$goo())
     End Sub
 End Module
                 </Document>
@@ -680,7 +684,7 @@ using System.Threading.Tasks;
 
 public static class extensions
 {
-    public static void AddRange<T, U>(this List<T> list, MyStruct<U> items) where U : interface1, interface2, interface3
+    public static void AddRange1<T, U>(this List<T> list, MyStruct<U> items) where U : interface1, interface2, interface3
     {
     }
 }
@@ -723,16 +727,16 @@ public class derived2 : interface3
 Module Program
     Sub Main(args As String())
         Dim list = New List(Of String)
-        list.AddRange(foo())
+        list.AddRange1(goo())
     End Sub
 
-    Private Function foo() As MyStruct(Of Object)
+    Private Function goo() As MyStruct(Of Object)
         Throw New NotImplementedException()
     End Function
 End Module]]>
                 </text>.Value.Trim()
 
-            Await TestAsync(input, expected)
+            Await TestAsync(input, expected, onAfterWorkspaceCreated:=Sub(w) w.SetTestLogger(AddressOf _outputHelper.WriteLine))
         End Function
 
         Public Async Function GenerateMethodUsingTypeConstraint_3BaseTypeConstraints_CommonDerived() As Task
@@ -744,7 +748,7 @@ End Module]]>
 Module Program
     Sub Main(args As String())
         Dim list = New List(Of String)
-        list.AddRange($$foo())
+        list.AddRange($$goo())
     End Sub
 End Module
                 </Document>
@@ -811,16 +815,16 @@ public class outer
 Module Program
     Sub Main(args As String())
         Dim list = New List(Of String)
-        list.AddRange(foo())
+        list.AddRange(goo())
     End Sub
 
-    Private Function foo() As MyStruct(Of outer.inner.derived3)
+    Private Function goo() As MyStruct(Of outer.inner.derived3)
         Throw New NotImplementedException()
     End Function
 End Module]]>
                 </text>.Value.Trim()
 
-            Await TestAsync(input, expected)
+            Await TestAsync(input, expected, onAfterWorkspaceCreated:=Sub(w) w.SetTestLogger(AddressOf _outputHelper.WriteLine))
         End Function
 
         <WorkItem(608827, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/608827")>
@@ -834,7 +838,7 @@ End Module]]>
 Module Program
     Sub Main(args As String())
         Dim list = New List(Of String)
-        list.AddRange($$foo())
+        list.AddRange1($$goo())
     End Sub
 End Module
                 </Document>
@@ -848,7 +852,7 @@ using System.Threading.Tasks;
 
 public static class extensions
 {
-    public static void AddRange<T, U>(this List<T> list, MyStruct<U> items) where U : interface1, interface2, interface3
+    public static void AddRange1<T, U>(this List<T> list, MyStruct<U> items) where U : interface1, interface2, interface3
     {
     }
 }
@@ -896,16 +900,16 @@ public class derived3 : derived1, interface3
 Module Program
     Sub Main(args As String())
         Dim list = New List(Of String)
-        list.AddRange(foo())
+        list.AddRange1(goo())
     End Sub
 
-    Private Function foo() As MyStruct(Of derived3)
+    Private Function goo() As MyStruct(Of derived3)
         Throw New NotImplementedException()
     End Function
 End Module]]>
                 </text>.Value.Trim()
 
-            Await TestAsync(input, expected)
+            Await TestAsync(input, expected, onAfterWorkspaceCreated:=Sub(w) w.SetTestLogger(AddressOf _outputHelper.WriteLine))
         End Function
 
         <WorkItem(608827, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/608827")>
@@ -919,7 +923,7 @@ End Module]]>
 Module Program
     Sub Main(args As String())
         Dim list = New List(Of String)
-        list.AddRange($$foo())
+        list.AddRange1($$goo())
     End Sub
 End Module
                 </Document>
@@ -933,7 +937,7 @@ using System.Threading.Tasks;
 
 public static class extensions
 {
-    public static void AddRange<T, U>(this List<T> list, MyStruct<U> items) where U : interface1, interface2, interface3
+    public static void AddRange1<T, U>(this List<T> list, MyStruct<U> items) where U : interface1, interface2, interface3
     {
     }
 }
@@ -988,16 +992,16 @@ public class outer
 Module Program
     Sub Main(args As String())
         Dim list = New List(Of String)
-        list.AddRange(foo())
+        list.AddRange1(goo())
     End Sub
 
-    Private Function foo() As MyStruct(Of outer.inner.derived3)
+    Private Function goo() As MyStruct(Of outer.inner.derived3)
         Throw New NotImplementedException()
     End Function
 End Module]]>
                 </text>.Value.Trim()
 
-            Await TestAsync(input, expected)
+            Await TestAsync(input, expected, onAfterWorkspaceCreated:=Sub(w) w.SetTestLogger(AddressOf _outputHelper.WriteLine))
         End Function
 
         <WorkItem(608827, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/608827")>
@@ -1010,7 +1014,7 @@ End Module]]>
                 <Document>Module Program
     Sub Main(args As String())
         Dim list = New List(Of String)
-        list.AddRange($$foo())
+        list.AddRange1($$goo())
     End Sub
 End Module</Document>
             </Project>
@@ -1023,7 +1027,7 @@ using System.Threading.Tasks;
 
 public static class extensions
 {
-    public static void AddRange<T, U>(this List<T> list, MyStruct<U> items) where U : Base1<AAA>, inter1
+    public static void AddRange1<T, U>(this List<T> list, MyStruct<U> items) where U : Base1<AAA>, inter1
     {
     }
 }
@@ -1061,23 +1065,25 @@ public class FinalType<T> : Base1<T>, inter1 where T : AAA
 Module Program
     Sub Main(args As String())
         Dim list = New List(Of String)
-        list.AddRange(foo())
+        list.AddRange1(goo())
     End Sub
 
-    Private Function foo() As MyStruct(Of FinalType(Of AAA))
+    Private Function goo() As MyStruct(Of FinalType(Of AAA))
         Throw New NotImplementedException()
     End Function
 End Module]]>
                 </text>.Value.Trim()
 
-            Await TestAsync(input, expected)
+            Await TestAsync(input, expected, onAfterWorkspaceCreated:=Sub(w) w.SetTestLogger(AddressOf _outputHelper.WriteLine))
         End Function
 
 #Region "Normal tests"
 
+#Disable Warning CA2243 ' Attribute string literals should parse correctly
         <WorkItem(144843, "Generate method stub generates into *.Designer.cs")>
         <Fact, Trait(Traits.Feature, Traits.Features.CodeActionsGenerateMethod)>
         Public Async Function PreferNormalFileOverAutoGeneratedFile_CSharp() As Task
+#Enable Warning CA2243 ' Attribute string literals should parse correctly
             Dim input =
 <Workspace>
     <Project Language="C#" CommonReferences="true">
@@ -1133,9 +1139,11 @@ partial class UserControl1
             Await TestAsync(input, fileNameToExpected:=expectedFileWithText)
         End Function
 
+#Disable Warning CA2243 ' Attribute string literals should parse correctly
         <WorkItem(144843, "Generate method stub generates into *.Designer.cs")>
         <Fact, Trait(Traits.Feature, Traits.Features.CodeActionsGenerateMethod)>
         Public Async Function IntoAutoGeneratedFileIfNoBetterLocationExists_CSharp() As Task
+#Enable Warning CA2243 ' Attribute string literals should parse correctly
             Dim input =
 <Workspace>
     <Project Language="C#" CommonReferences="true">
@@ -1177,9 +1185,11 @@ partial class UserControl1
             Await TestAsync(input, fileNameToExpected:=expectedFileWithText)
         End Function
 
+#Disable Warning CA2243 ' Attribute string literals should parse correctly
         <WorkItem(144843, "Generate method stub generates into *.Designer.cs")>
         <Fact, Trait(Traits.Feature, Traits.Features.CodeActionsGenerateMethod)>
         Public Async Function InAutoGeneratedFiles_CSharp() As Task
+#Enable Warning CA2243 ' Attribute string literals should parse correctly
             Dim input =
 <Workspace>
     <Project Language="C#" CommonReferences="true">
@@ -1220,9 +1230,11 @@ class Form1
             Await TestAsync(input, fileNameToExpected:=expectedFileWithText)
         End Function
 
+#Disable Warning CA2243 ' Attribute string literals should parse correctly
         <WorkItem(144843, "Generate method stub generates into *.Designer.cs")>
         <Fact, Trait(Traits.Feature, Traits.Features.CodeActionsGenerateMethod)>
         Public Async Function PreferNormalFileOverAutoGeneratedFile_Basic() As Task
+#Enable Warning CA2243 ' Attribute string literals should parse correctly
             Dim input =
 <Workspace>
     <Project Language="Visual Basic" CommonReferences="true">
@@ -1270,9 +1282,11 @@ End Class
             Await TestAsync(input, fileNameToExpected:=expectedFileWithText)
         End Function
 
+#Disable Warning CA2243 ' Attribute string literals should parse correctly
         <WorkItem(144843, "Generate method stub generates into *.Designer.cs")>
         <Fact, Trait(Traits.Feature, Traits.Features.CodeActionsGenerateMethod)>
         Public Async Function IntoAutoGeneratedFileIfNoBetterLocationExists_Basic() As Task
+#Enable Warning CA2243 ' Attribute string literals should parse correctly
             Dim input =
 <Workspace>
     <Project Language="Visual Basic" CommonReferences="true">
@@ -1308,9 +1322,11 @@ End Class
             Await TestAsync(input, fileNameToExpected:=expectedFileWithText)
         End Function
 
+#Disable Warning CA2243 ' Attribute string literals should parse correctly
         <WorkItem(144843, "Generate method stub generates into *.Designer.cs")>
         <Fact, Trait(Traits.Feature, Traits.Features.CodeActionsGenerateMethod)>
         Public Async Function InAutoGeneratedFiles_Basic() As Task
+#Enable Warning CA2243 ' Attribute string literals should parse correctly
             Dim input =
 <Workspace>
     <Project Language="Visual Basic" CommonReferences="true">

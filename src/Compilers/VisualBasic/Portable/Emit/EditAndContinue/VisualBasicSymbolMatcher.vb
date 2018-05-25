@@ -5,6 +5,7 @@ Imports System.Collections.Immutable
 Imports System.Runtime.InteropServices
 Imports System.Threading
 Imports Microsoft.CodeAnalysis.Emit
+Imports Microsoft.CodeAnalysis.PooledObjects
 Imports Microsoft.CodeAnalysis.VisualBasic.Symbols
 Imports Microsoft.CodeAnalysis.VisualBasic.Symbols.Metadata.PE
 
@@ -87,7 +88,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Emit
                         Return Nothing
                     End If
 
-                    Return Me.VisitTypeMembers(otherContainer, nestedType, AddressOf GetNestedTypes, Function(a, b) s_nameComparer.Equals(a.Name, b.Name))
+                    Return VisitTypeMembers(otherContainer, nestedType, AddressOf GetNestedTypes, Function(a, b) s_nameComparer.Equals(a.Name, b.Name))
                 End If
 
                 Dim member = TryCast(def, Cci.ITypeDefinitionMember)
@@ -99,7 +100,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Emit
 
                     Dim field = TryCast(def, Cci.IFieldDefinition)
                     If field IsNot Nothing Then
-                        Return Me.VisitTypeMembers(otherContainer, field, AddressOf GetFields, Function(a, b) s_nameComparer.Equals(a.Name, b.Name))
+                        Return VisitTypeMembers(otherContainer, field, AddressOf GetFields, Function(a, b) s_nameComparer.Equals(a.Name, b.Name))
                     End If
                 End If
 
@@ -139,7 +140,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Emit
                 Return Me._lazyTopLevelTypes
             End Function
 
-            Private Function VisitTypeMembers(Of T As {Class, Cci.ITypeDefinitionMember})(
+            Private Shared Function VisitTypeMembers(Of T As {Class, Cci.ITypeDefinitionMember})(
                 otherContainer As Cci.ITypeDefinition,
                 member As T,
                 getMembers As Func(Of Cci.ITypeDefinition, IEnumerable(Of T)),
@@ -233,13 +234,13 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Emit
                            otherSynthesizedMembersOpt As ImmutableDictionary(Of Cci.ITypeDefinition, ImmutableArray(Of Cci.ITypeDefinitionMember)),
                            deepTranslatorOpt As DeepTranslator)
 
-                Me._anonymousTypeMap = anonymousTypeMap
-                Me._sourceAssembly = sourceAssembly
-                Me._otherAssembly = otherAssembly
-                Me._otherSynthesizedMembersOpt = otherSynthesizedMembersOpt
-                Me._comparer = New SymbolComparer(Me, deepTranslatorOpt)
-                Me._matches = New ConcurrentDictionary(Of Symbol, Symbol)(ReferenceEqualityComparer.Instance)
-                Me._typeMembers = New ConcurrentDictionary(Of NamedTypeSymbol, IReadOnlyDictionary(Of String, ImmutableArray(Of Cci.ITypeDefinitionMember)))()
+                _anonymousTypeMap = anonymousTypeMap
+                _sourceAssembly = sourceAssembly
+                _otherAssembly = otherAssembly
+                _otherSynthesizedMembersOpt = otherSynthesizedMembersOpt
+                _comparer = New SymbolComparer(Me, deepTranslatorOpt)
+                _matches = New ConcurrentDictionary(Of Symbol, Symbol)(ReferenceEqualityComparer.Instance)
+                _typeMembers = New ConcurrentDictionary(Of NamedTypeSymbol, IReadOnlyDictionary(Of String, ImmutableArray(Of Cci.ITypeDefinitionMember)))()
             End Sub
 
             Friend Function TryGetAnonymousTypeName(type As NamedTypeSymbol, <Out()> ByRef name As String, <Out()> ByRef index As Integer) As Boolean
@@ -256,27 +257,11 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Emit
 
             Public Overrides Function DefaultVisit(symbol As Symbol) As Symbol
                 ' Symbol should have been handled elsewhere.
-                Throw New NotImplementedException()
+                Throw ExceptionUtilities.Unreachable
             End Function
 
             Public Overrides Function Visit(symbol As Symbol) As Symbol
                 Debug.Assert(symbol.ContainingAssembly IsNot Me._otherAssembly)
-
-                ' If the symbol is not defined in any of the previous source assemblies and not a constructed symbol
-                ' no matching is necessary, just return the symbol.
-                If TypeOf symbol.ContainingAssembly IsNot SourceAssemblySymbol Then
-                    Dim kind As SymbolKind = symbol.Kind
-                    If kind <> SymbolKind.ArrayType Then
-                        If kind <> SymbolKind.NamedType Then
-                            Debug.Assert(symbol.IsDefinition)
-                            Return symbol
-                        Else
-                            If symbol.IsDefinition Then
-                                Return symbol
-                            End If
-                        End If
-                    End If
-                End If
 
                 ' Add an entry for the match, even if there Is no match, to avoid
                 ' matching the same symbol unsuccessfully multiple times.
@@ -313,14 +298,60 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Emit
             End Function
 
             Public Overrides Function VisitModule([module] As ModuleSymbol) As Symbol
-                ' Only map symbols from source assembly and its previous generations to the other assembly. 
-                ' All other symbols should map to themselves.
-                If [module].ContainingAssembly.Identity.Equals(_sourceAssembly.Identity) Then
-                    Return _otherAssembly.Modules([module].Ordinal)
-                Else
-                    Return [module]
+                Dim otherAssembly = DirectCast(Visit([module].ContainingAssembly), AssemblySymbol)
+                If otherAssembly Is Nothing Then
+                    Return Nothing
                 End If
+
+                ' manifest module:
+                If [module].Ordinal = 0 Then
+                    Return otherAssembly.Modules(0)
+                End If
+
+                ' match non-manifest module by name:
+                For i = 1 To otherAssembly.Modules.Length - 1
+                    Dim otherModule = otherAssembly.Modules(i)
+
+                    ' use case sensitive comparison -- modules whose names differ in casing are considered distinct
+                    If StringComparer.Ordinal.Equals(otherModule.Name, [module].Name) Then
+                        Return otherModule
+                    End If
+                Next
+
+                Return Nothing
             End Function
+
+            Public Overrides Function VisitAssembly(assembly As AssemblySymbol) As Symbol
+                If assembly.IsLinked Then
+                    Return assembly
+                End If
+
+                ' When we map synthesized symbols from previous generations to the latest compilation 
+                ' we might encounter a symbol that is defined in arbitrary preceding generation, 
+                ' not just the immediately preceding generation. If the source assembly uses time-based 
+                ' versioning assemblies of preceding generations might differ in their version number.
+                If IdentityEqualIgnoringVersionWildcard(assembly, _sourceAssembly) Then
+                    Return _otherAssembly
+                End If
+
+                ' find a referenced assembly with the exactly same source identity:
+                For Each otherReferencedAssembly In _otherAssembly.Modules(0).ReferencedAssemblySymbols
+                    If IdentityEqualIgnoringVersionWildcard(assembly, otherReferencedAssembly) Then
+                        Return otherReferencedAssembly
+                    End If
+                Next
+
+                Return Nothing
+            End Function
+
+            Private Shared Function IdentityEqualIgnoringVersionWildcard(left As AssemblySymbol, right As AssemblySymbol) As Boolean
+                Dim leftIdentity = left.Identity
+                Dim rightIdentity = right.Identity
+                Return AssemblyIdentityComparer.SimpleNameComparer.Equals(leftIdentity.Name, rightIdentity.Name) AndAlso
+                       If(left.AssemblyVersionPattern, leftIdentity.Version).Equals(If(right.AssemblyVersionPattern, rightIdentity.Version)) AndAlso
+                       AssemblyIdentity.EqualIgnoringNameAndVersion(leftIdentity, rightIdentity)
+            End Function
+
 
             Public Overrides Function VisitNamespace([namespace] As NamespaceSymbol) As Symbol
                 Dim otherContainer As Symbol = Me.Visit([namespace].ContainingSymbol)
@@ -366,6 +397,13 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Emit
 
                     Dim typeMap = TypeSubstitution.Create(otherDef, otherTypeParameters, otherTypeArguments, False)
                     Return otherDef.Construct(typeMap)
+                ElseIf type.IsTupleType Then
+                    Dim otherDef = DirectCast(Me.Visit(type.TupleUnderlyingType), NamedTypeSymbol)
+                    If otherDef Is Nothing OrElse Not otherDef.IsTupleOrCompatibleWithTupleOfCardinality(type.TupleElementTypes.Length) Then
+                        Return Nothing
+                    End If
+
+                    Return otherDef
                 End If
 
                 Debug.Assert(type.IsDefinition)
@@ -400,7 +438,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Emit
             End Function
 
             Public Overrides Function VisitParameter(parameter As ParameterSymbol) As Symbol
-                Throw New InvalidOperationException()
+                Throw ExceptionUtilities.Unreachable
             End Function
 
             Public Overrides Function VisitProperty(symbol As PropertySymbol) As Symbol
@@ -408,7 +446,12 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Emit
             End Function
 
             Public Overrides Function VisitTypeParameter(symbol As TypeParameterSymbol) As Symbol
-                Dim otherContainer As symbol = Me.Visit(symbol.ContainingSymbol)
+                Dim indexed = TryCast(symbol, IndexedTypeParameterSymbol)
+                If indexed IsNot Nothing Then
+                    Return indexed
+                End If
+
+                Dim otherContainer As Symbol = Me.Visit(symbol.ContainingSymbol)
                 Debug.Assert(otherContainer IsNot Nothing)
 
                 Dim otherTypeParameters As ImmutableArray(Of TypeParameterSymbol)
@@ -416,10 +459,10 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Emit
                 Select Case otherContainer.Kind
                     Case SymbolKind.NamedType,
                          SymbolKind.ErrorType
-                        otherTypeParameters = (DirectCast(otherContainer, NamedTypeSymbol)).TypeParameters
+                        otherTypeParameters = DirectCast(otherContainer, NamedTypeSymbol).TypeParameters
 
                     Case SymbolKind.Method
-                        otherTypeParameters = (DirectCast(otherContainer, MethodSymbol)).TypeParameters
+                        otherTypeParameters = DirectCast(otherContainer, MethodSymbol).TypeParameters
 
                     Case Else
                         Throw ExceptionUtilities.UnexpectedValue(otherContainer.Kind)
@@ -511,7 +554,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Emit
 
                 Return Me._comparer.Equals(method.ReturnType, other.ReturnType) AndAlso
                     method.Parameters.SequenceEqual(other.Parameters, AddressOf Me.AreParametersEqual) AndAlso
-                    method.TypeArguments.SequenceEqual(other.TypeArguments, AddressOf Me.AreTypesEqual)
+                    method.TypeParameters.SequenceEqual(other.TypeParameters, AddressOf Me.AreTypesEqual)
             End Function
 
             Private Shared Function SubstituteTypeParameters(method As MethodSymbol) As MethodSymbol
@@ -528,6 +571,11 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Emit
                 Debug.Assert(s_nameComparer.Equals(type.Name, other.Name))
                 Debug.Assert(Not type.HasTypeArgumentsCustomModifiers)
                 Debug.Assert(Not other.HasTypeArgumentsCustomModifiers)
+
+                ' Tuple types should be unwrapped to their underlying type before getting here (see MatchSymbols.VisitNamedType)
+                Debug.Assert(Not type.IsTupleType)
+                Debug.Assert(Not other.IsTupleType)
+
                 Return type.TypeArgumentsNoUseSiteDiagnostics.SequenceEqual(other.TypeArgumentsNoUseSiteDiagnostics, AddressOf Me.AreTypesEqual)
             End Function
 
@@ -542,7 +590,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Emit
                     [property].Parameters.SequenceEqual(other.Parameters, AddressOf Me.AreParametersEqual)
             End Function
 
-            Private Function AreTypeParametersEqual(type As TypeParameterSymbol, other As TypeParameterSymbol) As Boolean
+            Private Shared Function AreTypeParametersEqual(type As TypeParameterSymbol, other As TypeParameterSymbol) As Boolean
                 Debug.Assert(type.Ordinal = other.Ordinal)
                 Debug.Assert(s_nameComparer.Equals(type.Name, other.Name))
                 ' Comparing constraints is unnecessary: two methods cannot differ by
@@ -605,10 +653,11 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Emit
                 End Sub
 
                 Public Overloads Function Equals(source As TypeSymbol, other As TypeSymbol) As Boolean
-                    Dim visitedSource = _matcher.Visit(source)
-                    Dim visitedOther = If(_deepTranslatorOpt IsNot Nothing, _deepTranslatorOpt.Visit(other), other)
+                    Dim visitedSource = DirectCast(_matcher.Visit(source), TypeSymbol)
+                    Dim visitedOther = If(_deepTranslatorOpt IsNot Nothing, DirectCast(_deepTranslatorOpt.Visit(other), TypeSymbol), other)
 
-                    Return visitedSource = visitedOther
+                    ' If both visitedSource and visitedOther are Nothing, return false meaning that the method was not able to verify the equality.
+                    Return visitedSource IsNot Nothing AndAlso visitedOther IsNot Nothing AndAlso visitedSource.IsSameType(visitedOther, TypeCompareKind.IgnoreTupleNames)
                 End Function
             End Class
         End Class
@@ -626,7 +675,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Emit
 
             Public Overrides Function DefaultVisit(symbol As Symbol) As Symbol
                 ' Symbol should have been handled elsewhere.
-                Throw New NotImplementedException()
+                Throw ExceptionUtilities.Unreachable
             End Function
 
             Public Overrides Function Visit(symbol As Symbol) As Symbol
@@ -645,6 +694,11 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Emit
             End Function
 
             Public Overrides Function VisitNamedType(type As NamedTypeSymbol) As Symbol
+                If type.IsTupleType Then
+                    type = type.TupleUnderlyingType
+                    Debug.Assert(Not type.IsTupleType)
+                End If
+
                 Dim originalDef As NamedTypeSymbol = type.OriginalDefinition
                 If originalDef IsNot type Then
                     Dim translatedTypeArguments = type.GetAllTypeArgumentsWithModifiers().SelectAsArray(Function(t, v) New TypeWithModifiers(DirectCast(v.Visit(t.Type), TypeSymbol),

@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 
@@ -25,6 +25,15 @@ namespace Microsoft.CodeAnalysis.Editor.Implementation.IntelliSense.SignatureHel
             if (!IsSessionActive)
             {
                 // No computation running, so just let the editor handle this.
+                return false;
+            }
+
+            // If we haven't started our editor session yet, just abort.
+            // The user hasn't seen a SigHelp presentation yet, so they're
+            // probably not trying to change the currently visible overload.
+            if (!sessionOpt.PresenterSession.EditorSessionIsActive)
+            {
+                DismissSessionIfActive();
                 return false;
             }
 

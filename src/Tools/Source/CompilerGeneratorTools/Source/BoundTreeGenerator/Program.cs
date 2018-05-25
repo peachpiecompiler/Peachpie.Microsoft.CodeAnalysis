@@ -3,6 +3,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Xml;
 using System.Xml.Serialization;
 
@@ -19,7 +20,7 @@ namespace BoundTreeGenerator
 
             if (args.Length != 3)
             {
-                Console.Error.WriteLine("Usage: \"{0} <language> <input> <output>\", where <language> is \"VB\" or \"CSharp\"", Path.GetFileNameWithoutExtension(Environment.GetCommandLineArgs()[0]));
+                Console.Error.WriteLine("Usage: \"{0} <language> <input> <output>\", where <language> is \"VB\" or \"CSharp\"", Path.GetFileNameWithoutExtension(args[0]));
                 return 1;
             }
 
@@ -41,44 +42,20 @@ namespace BoundTreeGenerator
                     return 1;
             }
 
-            var serializer = new XmlSerializer(typeof(Tree));
-            serializer.UnknownAttribute += new XmlAttributeEventHandler(serializer_UnknownAttribute);
-            serializer.UnknownElement += new XmlElementEventHandler(serializer_UnknownElement);
-            serializer.UnknownNode += new XmlNodeEventHandler(serializer_UnknownNode);
-            serializer.UnreferencedObject += new UnreferencedObjectEventHandler(serializer_UnreferencedObject);
 
             Tree tree;
-            using (var reader = new XmlTextReader(infilename) { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null })
+            var serializer = new XmlSerializer(typeof(Tree));
+            using (var reader = XmlReader.Create(infilename, new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit }))
             {
                 tree = (Tree)serializer.Deserialize(reader);
             }
 
-            using (var outfile = new StreamWriter(File.Open(outfilename, FileMode.Create)))
+            using (var outfile = new StreamWriter(File.Open(outfilename, FileMode.Create), Encoding.UTF8))
             {
                 BoundNodeClassWriter.Write(outfile, tree, targetLanguage);
             }
 
             return 0;
-        }
-
-        private static void serializer_UnreferencedObject(object sender, UnreferencedObjectEventArgs e)
-        {
-            Console.WriteLine("Unreferenced Object in XML deserialization");
-        }
-
-        private static void serializer_UnknownNode(object sender, XmlNodeEventArgs e)
-        {
-            Console.WriteLine("Unknown node {0} at line {1}, col {2}", e.Name, e.LineNumber, e.LinePosition);
-        }
-
-        private static void serializer_UnknownElement(object sender, XmlElementEventArgs e)
-        {
-            Console.WriteLine("Unknown element {0} at line {1}, col {2}", e.Element.Name, e.LineNumber, e.LinePosition);
-        }
-
-        private static void serializer_UnknownAttribute(object sender, XmlAttributeEventArgs e)
-        {
-            Console.WriteLine("Unknown attribute {0} at line {1}, col {2}", e.Attr.Name, e.LineNumber, e.LinePosition);
         }
     }
 }

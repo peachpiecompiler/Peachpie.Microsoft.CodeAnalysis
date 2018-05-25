@@ -1,9 +1,6 @@
 ﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
-using System;
-using System.Threading;
 using Microsoft.CodeAnalysis.ChangeSignature;
-using Microsoft.CodeAnalysis.Editor.Commands;
 using Microsoft.CodeAnalysis.Editor.Host;
 using Microsoft.CodeAnalysis.Editor.Shared;
 using Microsoft.CodeAnalysis.Editor.Shared.Extensions;
@@ -11,93 +8,98 @@ using Microsoft.CodeAnalysis.Editor.Undo;
 using Microsoft.CodeAnalysis.Notification;
 using Microsoft.CodeAnalysis.Shared.Extensions;
 using Microsoft.CodeAnalysis.Text;
+using Microsoft.VisualStudio.Commanding;
 using Microsoft.VisualStudio.Text;
 using Microsoft.VisualStudio.Text.Editor;
+using Microsoft.VisualStudio.Text.Editor.Commanding.Commands;
+using VSCommanding = Microsoft.VisualStudio.Commanding;
 
 namespace Microsoft.CodeAnalysis.Editor.Implementation.ChangeSignature
 {
-    internal abstract class AbstractChangeSignatureCommandHandler : ICommandHandler<ReorderParametersCommandArgs>, ICommandHandler<RemoveParametersCommandArgs>
+    internal abstract class AbstractChangeSignatureCommandHandler : VSCommanding.ICommandHandler<ReorderParametersCommandArgs>,
+        VSCommanding.ICommandHandler<RemoveParametersCommandArgs>
     {
-        public CommandState GetCommandState(ReorderParametersCommandArgs args, Func<CommandState> nextHandler)
-        {
-            return GetCommandState(args.SubjectBuffer, nextHandler);
-        }
+        public string DisplayName => EditorFeaturesResources.Change_Signature;
 
-        public CommandState GetCommandState(RemoveParametersCommandArgs args, Func<CommandState> nextHandler)
-        {
-            return GetCommandState(args.SubjectBuffer, nextHandler);
-        }
+        public VSCommanding.CommandState GetCommandState(ReorderParametersCommandArgs args)
+            => GetCommandState(args.SubjectBuffer);
 
-        private static CommandState GetCommandState(ITextBuffer subjectBuffer, Func<CommandState> nextHandler)
+        public VSCommanding.CommandState GetCommandState(RemoveParametersCommandArgs args)
+            => GetCommandState(args.SubjectBuffer);
+
+        private static VSCommanding.CommandState GetCommandState(ITextBuffer subjectBuffer)
         {
             var document = subjectBuffer.CurrentSnapshot.GetOpenDocumentInCurrentContextWithChanges();
             if (document == null ||
                 !document.Project.Solution.Workspace.CanApplyChange(ApplyChangesKind.ChangeDocument))
             {
-                return nextHandler();
+                return VSCommanding.CommandState.Unspecified;
             }
 
             var supportsFeatureService = document.Project.Solution.Workspace.Services.GetService<IDocumentSupportsFeatureService>();
             if (!supportsFeatureService.SupportsRefactorings(document))
             {
-                return nextHandler();
+                return VSCommanding.CommandState.Unspecified;
             }
 
-            return CommandState.Available;
+            return VSCommanding.CommandState.Available;
         }
 
-        public void ExecuteCommand(RemoveParametersCommandArgs args, Action nextHandler)
-        {
-            ExecuteCommand(args.TextView, args.SubjectBuffer, nextHandler);
-        }
+        public bool ExecuteCommand(RemoveParametersCommandArgs args, CommandExecutionContext context)
+            => ExecuteCommand(args.TextView, args.SubjectBuffer, context);
 
-        public void ExecuteCommand(ReorderParametersCommandArgs args, Action nextHandler)
-        {
-            ExecuteCommand(args.TextView, args.SubjectBuffer, nextHandler);
-        }
+        public bool ExecuteCommand(ReorderParametersCommandArgs args, CommandExecutionContext context)
+            => ExecuteCommand(args.TextView, args.SubjectBuffer, context);
 
-        private static void ExecuteCommand(ITextView textView, ITextBuffer subjectBuffer, Action nextHandler)
+        private bool ExecuteCommand(ITextView textView, ITextBuffer subjectBuffer, CommandExecutionContext context)
         {
             var document = subjectBuffer.CurrentSnapshot.GetOpenDocumentInCurrentContextWithChanges();
             if (document == null)
             {
-                nextHandler();
-                return;
+                return false;
             }
 
             // TODO: reuse GetCommandState instead
             var workspace = document.Project.Solution.Workspace;
             if (!workspace.CanApplyChange(ApplyChangesKind.ChangeDocument))
             {
-                nextHandler();
-                return;
+                return false;
             }
 
             var supportsFeatureService = document.Project.Solution.Workspace.Services.GetService<IDocumentSupportsFeatureService>();
             if (!supportsFeatureService.SupportsRefactorings(document))
             {
-                nextHandler();
-                return;
+                return false;
             }
 
             var caretPoint = textView.GetCaretPoint(subjectBuffer);
             if (!caretPoint.HasValue)
             {
-                nextHandler();
-                return;
+                return false;
             }
 
-            // Reorder parameters is not cancellable.
-            var reorderParametersService = document.GetLanguageService<AbstractChangeSignatureService>();
-            var result = reorderParametersService.ChangeSignature(
-                document,
-                caretPoint.Value.Position,
-                (errorMessage, severity) => workspace.Services.GetService<INotificationService>().SendNotification(errorMessage, severity: severity),
-                CancellationToken.None);
+            ChangeSignatureResult result = null;
+
+            using (context.OperationContext.AddScope(allowCancellation: true, FeaturesResources.Change_signature))
+            {
+                var reorderParametersService = document.GetLanguageService<AbstractChangeSignatureService>();
+                result = reorderParametersService.ChangeSignature(
+                    document,
+                    caretPoint.Value.Position,
+                    (errorMessage, severity) =>
+                    {
+                        // We are about to show a modal UI dialog so we should take over the command execution
+                        // wait context. That means the command system won't attempt to show its own wait dialog 
+                        // and also will take it into consideration when measuring command handling duration.
+                        context.OperationContext.TakeOwnership();
+                        workspace.Services.GetService<INotificationService>().SendNotification(errorMessage, severity: severity);
+                    },
+                    context.OperationContext.UserCancellationToken);
+            }
 
             if (result == null || !result.Succeeded)
             {
-                return;
+                return true;
             }
 
             var finalSolution = result.UpdatedSolution;
@@ -105,10 +107,14 @@ namespace Microsoft.CodeAnalysis.Editor.Implementation.ChangeSignature
             var previewService = workspace.Services.GetService<IPreviewDialogService>();
             if (previewService != null && result.PreviewChanges)
             {
+                // We are about to show a modal UI dialog so we should take over the command execution
+                // wait context. That means the command system won't attempt to show its own wait dialog 
+                // and also will take it into consideration when measuring command handling duration.
+                context.OperationContext.TakeOwnership();
                 finalSolution = previewService.PreviewChanges(
-                    string.Format(EditorFeaturesResources.PreviewChangesOf, EditorFeaturesResources.ChangeSignature),
+                    string.Format(EditorFeaturesResources.Preview_Changes_0, EditorFeaturesResources.Change_Signature),
                     "vs.csharp.refactoring.preview",
-                    EditorFeaturesResources.ChangeSignatureTitle,
+                    EditorFeaturesResources.Change_Signature_colon,
                     result.Name,
                     result.Glyph.GetValueOrDefault(),
                     result.UpdatedSolution,
@@ -118,19 +124,21 @@ namespace Microsoft.CodeAnalysis.Editor.Implementation.ChangeSignature
             if (finalSolution == null)
             {
                 // User clicked cancel.
-                return;
+                return true;
             }
 
-            using (var workspaceUndoTransaction = workspace.OpenGlobalUndoTransaction(FeaturesResources.ChangeSignature))
+            using (var workspaceUndoTransaction = workspace.OpenGlobalUndoTransaction(FeaturesResources.Change_signature))
             {
                 if (!workspace.TryApplyChanges(finalSolution))
                 {
                     // TODO: handle failure
-                    return;
+                    return true;
                 }
 
                 workspaceUndoTransaction.Commit();
             }
+
+            return true;
         }
     }
 }

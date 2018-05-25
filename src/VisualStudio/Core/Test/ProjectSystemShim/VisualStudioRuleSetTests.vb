@@ -1,19 +1,18 @@
-' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 Imports System.IO
-Imports System.Threading
 Imports Microsoft.CodeAnalysis
 Imports Microsoft.CodeAnalysis.Editor.UnitTests
 Imports Microsoft.CodeAnalysis.Shared.TestHooks
+Imports Microsoft.CodeAnalysis.Test.Utilities
 Imports Microsoft.VisualStudio.LanguageServices.Implementation.ProjectSystem
 Imports Microsoft.VisualStudio.LanguageServices.UnitTests.ProjectSystemShim.Framework
 Imports Roslyn.Test.Utilities
-Imports Roslyn.Utilities
 
 Namespace Microsoft.VisualStudio.LanguageServices.UnitTests.ProjectSystemShim
     Public Class VisualStudioRuleSetTests
 
-        <Fact, Trait(Traits.Feature, Traits.Features.Diagnostics)>
+        <WpfFact, Trait(Traits.Feature, Traits.Features.Diagnostics)>
         Public Sub SingleFile()
             Dim ruleSetSource = "<?xml version=""1.0"" encoding=""utf-8""?>
 <RuleSet Name=""New Rule Set3"" Description=""Test"" ToolsVersion=""12.0"">
@@ -33,7 +32,7 @@ Namespace Microsoft.VisualStudio.LanguageServices.UnitTests.ProjectSystemShim
             File.WriteAllText(ruleSetPath, ruleSetSource)
 
             Dim fileChangeService = New MockVsFileChangeEx
-            Using ruleSetManager = New VisualStudioRuleSetManager(fileChangeService, New TestForegroundNotificationService(), AggregateAsynchronousOperationListener.CreateEmptyListener())
+            Using ruleSetManager = New VisualStudioRuleSetManager(fileChangeService, New TestForegroundNotificationService(), AsynchronousOperationListenerProvider.NullListener)
                 Dim visualStudioRuleSet = ruleSetManager.GetOrCreateRuleSet(ruleSetPath)
 
                 ' Signing up for file change notifications is lazy, so read the rule set to force it.
@@ -48,7 +47,7 @@ Namespace Microsoft.VisualStudio.LanguageServices.UnitTests.ProjectSystemShim
             Directory.Delete(tempPath, recursive:=True)
         End Sub
 
-        <Fact, Trait(Traits.Feature, Traits.Features.Diagnostics)>
+        <WpfFact, Trait(Traits.Feature, Traits.Features.Diagnostics)>
         Public Sub TwoFiles()
             Dim ruleSetSource = "<?xml version=""1.0"" encoding=""utf-8""?>
 <RuleSet Name=""New Rule Set1"" Description=""Test"" ToolsVersion=""12.0"">
@@ -78,7 +77,7 @@ Namespace Microsoft.VisualStudio.LanguageServices.UnitTests.ProjectSystemShim
             File.WriteAllText(includePath, includeSource)
 
             Dim fileChangeService = New MockVsFileChangeEx
-            Using ruleSetManager = New VisualStudioRuleSetManager(fileChangeService, New TestForegroundNotificationService(), AggregateAsynchronousOperationListener.CreateEmptyListener())
+            Using ruleSetManager = New VisualStudioRuleSetManager(fileChangeService, New TestForegroundNotificationService(), AsynchronousOperationListenerProvider.NullListener)
                 Dim visualStudioRuleSet = ruleSetManager.GetOrCreateRuleSet(ruleSetPath)
 
                 ' Signing up for file change notifications is lazy, so read the rule set to force it.
@@ -95,7 +94,7 @@ Namespace Microsoft.VisualStudio.LanguageServices.UnitTests.ProjectSystemShim
             Directory.Delete(tempPath, recursive:=True)
         End Sub
 
-        <Fact, Trait(Traits.Feature, Traits.Features.Diagnostics)>
+        <WpfFact, Trait(Traits.Feature, Traits.Features.Diagnostics)>
         Public Sub IncludeUpdated()
             Dim ruleSetSource = "<?xml version=""1.0"" encoding=""utf-8""?>
 <RuleSet Name=""New Rule Set1"" Description=""Test"" ToolsVersion=""12.0"">
@@ -125,7 +124,7 @@ Namespace Microsoft.VisualStudio.LanguageServices.UnitTests.ProjectSystemShim
             File.WriteAllText(includePath, includeSource)
 
             Dim fileChangeService = New MockVsFileChangeEx
-            Using ruleSetManager = New VisualStudioRuleSetManager(fileChangeService, New TestForegroundNotificationService(), AggregateAsynchronousOperationListener.CreateEmptyListener())
+            Using ruleSetManager = New VisualStudioRuleSetManager(fileChangeService, New TestForegroundNotificationService(), AsynchronousOperationListenerProvider.NullListener)
                 Dim ruleSet1 = ruleSetManager.GetOrCreateRuleSet(ruleSetPath)
                 Dim handlerCalled As Boolean = False
                 Dim handler = Sub(sender As Object, e As EventArgs)
@@ -147,7 +146,7 @@ Namespace Microsoft.VisualStudio.LanguageServices.UnitTests.ProjectSystemShim
             Directory.Delete(tempPath, recursive:=True)
         End Sub
 
-        <Fact, Trait(Traits.Feature, Traits.Features.Diagnostics)>
+        <WpfFact, Trait(Traits.Feature, Traits.Features.Diagnostics)>
         Public Sub SameFileRequestedAfterChange()
             Dim ruleSetSource = "<?xml version=""1.0"" encoding=""utf-8""?>
 <RuleSet Name=""New Rule Set3"" Description=""Test"" ToolsVersion=""12.0"">
@@ -167,7 +166,7 @@ Namespace Microsoft.VisualStudio.LanguageServices.UnitTests.ProjectSystemShim
             File.WriteAllText(ruleSetPath, ruleSetSource)
 
             Dim fileChangeService = New MockVsFileChangeEx
-            Using ruleSetManager = New VisualStudioRuleSetManager(fileChangeService, New TestForegroundNotificationService(), AggregateAsynchronousOperationListener.CreateEmptyListener())
+            Using ruleSetManager = New VisualStudioRuleSetManager(fileChangeService, New TestForegroundNotificationService(), AsynchronousOperationListenerProvider.NullListener)
                 Dim ruleSet1 = ruleSetManager.GetOrCreateRuleSet(ruleSetPath)
 
                 ' Signing up for file change notifications is lazy, so read the rule set to force it.
@@ -190,7 +189,7 @@ Namespace Microsoft.VisualStudio.LanguageServices.UnitTests.ProjectSystemShim
             Directory.Delete(tempPath, recursive:=True)
         End Sub
 
-        <Fact, Trait(Traits.Feature, Traits.Features.Diagnostics)>
+        <WpfFact, Trait(Traits.Feature, Traits.Features.Diagnostics)>
         Public Sub SameFileRequestedMultipleTimes()
             Dim ruleSetSource = "<?xml version=""1.0"" encoding=""utf-8""?>
 <RuleSet Name=""New Rule Set3"" Description=""Test"" ToolsVersion=""12.0"">
@@ -210,7 +209,7 @@ Namespace Microsoft.VisualStudio.LanguageServices.UnitTests.ProjectSystemShim
             File.WriteAllText(ruleSetPath, ruleSetSource)
 
             Dim fileChangeService = New MockVsFileChangeEx
-            Using ruleSetManager = New VisualStudioRuleSetManager(fileChangeService, New TestForegroundNotificationService(), AggregateAsynchronousOperationListener.CreateEmptyListener())
+            Using ruleSetManager = New VisualStudioRuleSetManager(fileChangeService, New TestForegroundNotificationService(), AsynchronousOperationListenerProvider.NullListener)
                 Dim ruleSet1 = ruleSetManager.GetOrCreateRuleSet(ruleSetPath)
 
                 ' Signing up for file change notifications is lazy, so read the rule set to force it.
@@ -227,7 +226,7 @@ Namespace Microsoft.VisualStudio.LanguageServices.UnitTests.ProjectSystemShim
             Directory.Delete(tempPath, recursive:=True)
         End Sub
 
-        <Fact, Trait(Traits.Feature, Traits.Features.Diagnostics)>
+        <WpfFact, Trait(Traits.Feature, Traits.Features.Diagnostics)>
         Public Sub FileWithError()
             Dim ruleSetSource = "<?xml version=""1.0"" encoding=""utf-8""?>
 <RuleSet Name=""New Rule Set3"" Description=""Test"" ToolsVersion=""12.0"">
@@ -247,7 +246,7 @@ Namespace Microsoft.VisualStudio.LanguageServices.UnitTests.ProjectSystemShim
             File.WriteAllText(ruleSetPath, ruleSetSource)
 
             Dim fileChangeService = New MockVsFileChangeEx
-            Using ruleSetManager = New VisualStudioRuleSetManager(fileChangeService, New TestForegroundNotificationService(), AggregateAsynchronousOperationListener.CreateEmptyListener())
+            Using ruleSetManager = New VisualStudioRuleSetManager(fileChangeService, New TestForegroundNotificationService(), AsynchronousOperationListenerProvider.NullListener)
                 Dim ruleSet = ruleSetManager.GetOrCreateRuleSet(ruleSetPath)
 
                 Dim generalDiagnosticOption = ruleSet.GetGeneralDiagnosticOption()

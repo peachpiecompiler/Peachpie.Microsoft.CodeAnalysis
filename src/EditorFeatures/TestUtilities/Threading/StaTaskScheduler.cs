@@ -54,6 +54,7 @@ namespace Roslyn.Test.Utilities
                         }
                     }
                 });
+                thread.Name = $"{nameof(StaTaskScheduler)} thread";
                 thread.IsBackground = true;
                 thread.SetApartmentState(ApartmentState.STA);
                 return thread;
@@ -63,6 +64,22 @@ namespace Roslyn.Test.Utilities
             foreach (var thread in _threads)
             {
                 thread.Start();
+            }
+        }
+
+        internal void DoEvents()
+        {
+            if (!_threads.Contains(Thread.CurrentThread))
+                throw new InvalidOperationException();
+
+            // Continually get the next task and try to execute it.
+            // This will continue until the scheduler contains no more actively-scheduled tasks.
+            while (_tasks.TryTake(out var t))
+            {
+                if (!TryExecuteTask(t))
+                {
+                    System.Diagnostics.Debug.Assert(t.IsCompleted, "Can't run, not completed");
+                }
             }
         }
 

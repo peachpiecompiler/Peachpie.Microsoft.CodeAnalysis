@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using Microsoft.CodeAnalysis.Emit;
-using Microsoft.DiaSymReader;
 using Xunit;
 
 namespace Microsoft.CodeAnalysis.ExpressionEvaluator.UnitTests
@@ -13,10 +12,12 @@ namespace Microsoft.CodeAnalysis.ExpressionEvaluator.UnitTests
     internal sealed class RuntimeInstance : IDisposable
     {
         internal readonly ImmutableArray<ModuleInstance> Modules;
+        internal readonly DebugInformationFormat DebugFormat;
 
-        internal RuntimeInstance(ImmutableArray<ModuleInstance> modules)
+        internal RuntimeInstance(ImmutableArray<ModuleInstance> modules, DebugInformationFormat debugFormat)
         {
-            this.Modules = modules;
+            Modules = modules;
+            DebugFormat = debugFormat;
         }
 
         void IDisposable.Dispose()
@@ -29,14 +30,15 @@ namespace Microsoft.CodeAnalysis.ExpressionEvaluator.UnitTests
 
         internal static RuntimeInstance Create(IEnumerable<ModuleInstance> modules)
         {
-            return new RuntimeInstance(ImmutableArray.CreateRange(modules));
+            return new RuntimeInstance(ImmutableArray.CreateRange(modules), DebugInformationFormat.Pdb);
         }
 
         internal static RuntimeInstance Create(
             Compilation compilation,
-            IEnumerable<MetadataReference> references = null, 
-            DebugInformationFormat debugFormat = 0,
-            bool includeLocalSignatures = true)
+            IEnumerable<MetadataReference> references,
+            DebugInformationFormat debugFormat,
+            bool includeLocalSignatures,
+            bool includeIntrinsicAssembly)
         {
             var module = compilation.ToModuleInstance(debugFormat, includeLocalSignatures);
 
@@ -45,14 +47,18 @@ namespace Microsoft.CodeAnalysis.ExpressionEvaluator.UnitTests
                 references = ExpressionCompilerTestHelpers.GetEmittedReferences(compilation, module.GetMetadataReader());
             }
 
-            references = references.Concat(new[] { ExpressionCompilerTestHelpers.IntrinsicAssemblyReference });
+            if (includeIntrinsicAssembly)
+            {
+                references = references.Concat(new[] { ExpressionCompilerTestHelpers.IntrinsicAssemblyReference });
+            }
 
-            return Create(module, references);
+            return Create(module, references, debugFormat);
         }
 
         internal static RuntimeInstance Create(
             ModuleInstance module,
-            IEnumerable<MetadataReference> references)
+            IEnumerable<MetadataReference> references,
+            DebugInformationFormat debugFormat)
         {
             // Create modules for the references and the program
             var modules = ImmutableArray.CreateRange(
@@ -60,7 +66,7 @@ namespace Microsoft.CodeAnalysis.ExpressionEvaluator.UnitTests
                 Concat(new[] { module }));
 
             VerifyAllModules(modules);
-            return new RuntimeInstance(modules);
+            return new RuntimeInstance(modules, debugFormat);
         }
 
         /// <summary>

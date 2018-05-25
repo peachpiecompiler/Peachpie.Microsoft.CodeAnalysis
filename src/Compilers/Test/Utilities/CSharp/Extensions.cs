@@ -5,11 +5,13 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Symbols;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.PooledObjects;
 using Microsoft.CodeAnalysis.Text;
 using Xunit;
 
@@ -366,7 +368,7 @@ namespace Microsoft.CodeAnalysis.CSharp.UnitTests
                     return typeSym.Name == expType.Name;
                 }
                 // generic
-                if (!(expType.IsGenericType))
+                if (!(expType.GetTypeInfo().IsGenericType))
                 {
                     return false;
                 }
@@ -383,7 +385,7 @@ namespace Microsoft.CodeAnalysis.CSharp.UnitTests
                     return false;
                 }
                 var expArgs = expType.GetGenericArguments();
-                var actArgs = namedType.TypeArguments;
+                var actArgs = namedType.TypeArguments();
                 if (!(expArgs.Count() == actArgs.Length))
                 {
                     return false;
@@ -410,7 +412,7 @@ namespace Microsoft.CodeAnalysis.CSharp.UnitTests
                 {
                     return false;
                 }
-                if (!IsEqual(arySym.BaseType, expType.BaseType))
+                if (!IsEqual(arySym.BaseType(), expType.GetTypeInfo().BaseType))
                 {
                     return false;
                 }
@@ -551,5 +553,30 @@ internal static class Extensions
         }
 
         return (Symbol)model.GetDeclaredSymbol(declaration, cancellationToken);
+    }
+
+    public static NamedTypeSymbol BaseType(this TypeSymbol symbol)
+    {
+        return symbol.BaseTypeNoUseSiteDiagnostics;
+    }
+
+    public static ImmutableArray<NamedTypeSymbol> Interfaces(this TypeSymbol symbol)
+    {
+        return symbol.InterfacesNoUseSiteDiagnostics();
+    }
+
+    public static ImmutableArray<NamedTypeSymbol> AllInterfaces(this TypeSymbol symbol)
+    {
+        return symbol.AllInterfacesNoUseSiteDiagnostics;
+    }
+
+    public static ImmutableArray<TypeSymbol> TypeArguments(this NamedTypeSymbol symbol)
+    {
+        return symbol.TypeArgumentsNoUseSiteDiagnostics;
+    }
+
+    public static ImmutableArray<TypeSymbol> ConstraintTypes(this TypeParameterSymbol symbol)
+    {
+        return symbol.ConstraintTypesNoUseSiteDiagnostics;
     }
 }

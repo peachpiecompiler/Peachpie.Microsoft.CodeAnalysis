@@ -2,9 +2,12 @@
 
 using Microsoft.CodeAnalysis.Editor.Host;
 using Microsoft.VisualStudio.LanguageServices.Interactive;
+using Microsoft.VisualStudio.Text.Editor;
 using System;
 using System.Collections.Immutable;
 using System.Threading.Tasks;
+using Microsoft.VisualStudio.InteractiveWindow;
+using System.Collections.Generic;
 
 namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.Interactive.Commands
 {
@@ -24,12 +27,19 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.Interactive.Commands
 
         internal ImmutableArray<string> SourceSearchPaths { get; set; }
 
+        internal ImmutableArray<string> ProjectNamespaces { get; set; }
+
         internal ImmutableArray<string> NamespacesToImport { get; set; }
 
         internal string ProjectDirectory { get; set; }
 
-        public TestResetInteractive(IWaitIndicator waitIndicator, Func<string, string> createReference, Func<string, string> createImport, bool buildSucceeds)
-            : base(createReference, createImport)
+        public TestResetInteractive(
+            IWaitIndicator waitIndicator,
+            IEditorOptionsFactoryService editorOptionsFactoryService,
+            Func<string, string> createReference,
+            Func<string, string> createImport,
+            bool buildSucceeds)
+            : base(editorOptionsFactoryService, createReference, createImport)
         {
             _waitIndicator = waitIndicator;
             _buildSucceeds = buildSucceeds;
@@ -50,13 +60,13 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.Interactive.Commands
             out ImmutableArray<string> references,
             out ImmutableArray<string> referenceSearchPaths,
             out ImmutableArray<string> sourceSearchPaths,
-            out ImmutableArray<string> namespacesToImport,
+            out ImmutableArray<string> projectNamespaces,
             out string projectDirectory)
         {
             references = References;
             referenceSearchPaths = ReferenceSearchPaths;
             sourceSearchPaths = SourceSearchPaths;
-            namespacesToImport = NamespacesToImport;
+            projectNamespaces = ProjectNamespaces;
             projectDirectory = ProjectDirectory;
             return true;
         }
@@ -64,6 +74,11 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.Interactive.Commands
         protected override IWaitIndicator GetWaitIndicator()
         {
             return _waitIndicator;
+        }
+
+        protected override Task<IEnumerable<string>> GetNamespacesToImportAsync(IEnumerable<string> namespacesToImport, IInteractiveWindow interactiveWindow)
+        {
+            return Task.FromResult((IEnumerable<string>)NamespacesToImport);
         }
     }
 }

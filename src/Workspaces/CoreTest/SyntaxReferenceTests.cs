@@ -1,9 +1,8 @@
 ﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
-using System;
 using System.Linq;
-using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Host;
+using Microsoft.CodeAnalysis.Host.Mef;
 using Microsoft.CodeAnalysis.Test.Utilities;
 using Microsoft.CodeAnalysis.Text;
 using Roslyn.Test.Utilities;
@@ -13,6 +12,7 @@ using VB = Microsoft.CodeAnalysis.VisualBasic;
 
 namespace Microsoft.CodeAnalysis.UnitTests
 {
+    [UseExportProvider]
     public class SyntaxReferenceTests : TestBase
     {
         private Solution CreateSingleFileCSharpSolution(string source)
@@ -37,7 +37,7 @@ namespace Microsoft.CodeAnalysis.UnitTests
 
         private static Solution CreateEmptySolutionUsingRecoverableSyntaxTrees()
         {
-            var workspace = new AdhocWorkspace(TestHost.Services, workspaceKind: "NotKeptAlive");
+            var workspace = new AdhocWorkspace(MefHostServices.Create(TestHost.Assemblies), workspaceKind: "NotKeptAlive");
             workspace.Options = workspace.Options.WithChangedOption(Host.CacheOptions.RecoverableTreeLengthThreshold, 0);
             return workspace.CurrentSolution;
         }
@@ -163,7 +163,7 @@ public class C
         }
 
         [Fact, Trait(Traits.Feature, Traits.Features.Workspace)]
-        public void TestVisualBasicReferenceToZeroWidthNodeInStructuredTrivia()
+        public async System.Threading.Tasks.Task TestVisualBasicReferenceToZeroWidthNodeInStructuredTriviaAsync()
         {
             var solution = CreateSingleFileVisualBasicSolution(@"
 #If (True Or ) Then
@@ -172,7 +172,7 @@ End Class
 #End If
 ");
 
-            var tree = solution.Projects.First().Documents.First().GetSyntaxTreeAsync().Result;
+            var tree = await solution.Projects.First().Documents.First().GetSyntaxTreeAsync();
 
             // find binary node that is part of #if directive
             var binary = tree.GetRoot().DescendantNodes(descendIntoTrivia: true).OfType<VB.Syntax.BinaryExpressionSyntax>().First();

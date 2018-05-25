@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
@@ -9,30 +9,47 @@ using System.Windows.Documents;
 using System.Windows.Navigation;
 using Microsoft.CodeAnalysis.Diagnostics.Log;
 using Microsoft.VisualStudio.LanguageServices.Implementation.Utilities;
-using Microsoft.VisualStudio.Text.Differencing;
 using Roslyn.Utilities;
+using Microsoft.CodeAnalysis.Editor.Implementation.Preview;
+using IVsUIShell = Microsoft.VisualStudio.Shell.Interop.IVsUIShell;
+using OLECMDEXECOPT = Microsoft.VisualStudio.OLE.Interop.OLECMDEXECOPT;
 
 namespace Microsoft.VisualStudio.LanguageServices.Implementation.PreviewPane
 {
     internal partial class PreviewPane : UserControl, IDisposable
     {
+        private const double DefaultWidth = 400;
+
         private static readonly string s_dummyThreeLineTitle = "A" + Environment.NewLine + "A" + Environment.NewLine + "A";
         private static readonly Size s_infiniteSize = new Size(double.PositiveInfinity, double.PositiveInfinity);
 
         private readonly string _id;
         private readonly bool _logIdVerbatimInTelemetry;
+        private readonly IVsUIShell _uiShell;
 
         private bool _isExpanded;
         private double _heightForThreeLineTitle;
-        private IWpfDifferenceViewer _previewDiffViewer;
+        private DifferenceViewerPreview _differenceViewerPreview;
 
-        public PreviewPane(Image severityIcon, string id, string title, string description, Uri helpLink, string helpLinkToolTipText,
-            IList<object> previewContent, bool logIdVerbatimInTelemetry)
+        public PreviewPane(
+            Image severityIcon,
+            string id,
+            string title,
+            string description,
+            Uri helpLink,
+            string helpLinkToolTipText,
+            IReadOnlyList<object> previewContent,
+            bool logIdVerbatimInTelemetry,
+            IVsUIShell uiShell,
+            Guid optionPageGuid = default)
         {
             InitializeComponent();
 
+            Loaded += PreviewPane_Loaded;
+
             _id = id;
             _logIdVerbatimInTelemetry = logIdVerbatimInTelemetry;
+            _uiShell = uiShell;
 
             // Initialize header portion.
             if ((severityIcon != null) && !string.IsNullOrWhiteSpace(id) && !string.IsNullOrWhiteSpace(title))
@@ -58,11 +75,35 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.PreviewPane
                 }
             }
 
+            _optionPageGuid = optionPageGuid;
+
+            if (optionPageGuid == default)
+            {
+                OptionsButton.Visibility = Visibility.Collapsed;
+            }
+
             // Initialize preview (i.e. diff view) portion.
             InitializePreviewElement(previewContent);
         }
 
-        private void InitializePreviewElement(IList<object> previewItems)
+        public FrameworkElement ParentElement
+        {
+            get { return (FrameworkElement)GetValue(ParentElementProperty); }
+            set { SetValue(ParentElementProperty, value); }
+        }
+
+        public static readonly DependencyProperty ParentElementProperty =
+            DependencyProperty.Register("ParentElement", typeof(FrameworkElement), typeof(PreviewPane), new PropertyMetadata(null));
+
+        private void PreviewPane_Loaded(object sender, RoutedEventArgs e)
+        {
+            Loaded -= PreviewPane_Loaded;
+            ParentElement = Parent as FrameworkElement;
+        }
+
+        public string AutomationName => ServicesVSResources.Preview_pane;
+
+        private void InitializePreviewElement(IReadOnlyList<object> previewItems)
         {
             var previewElement = CreatePreviewElement(previewItems);
 
@@ -84,7 +125,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.PreviewPane
             AdjustWidthAndHeight(previewElement);
         }
 
-        private FrameworkElement CreatePreviewElement(IList<object> previewItems)
+        private FrameworkElement CreatePreviewElement(IReadOnlyList<object> previewItems)
         {
             if (previewItems == null || previewItems.Count == 0)
             {
@@ -99,89 +140,110 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.PreviewPane
 
             var grid = new Grid();
 
-            for (var i = 0; i < previewItems.Count; i++)
+            foreach (var previewItem in previewItems)
             {
-                var previewItem = previewItems[i];
+                var previewElement = GetPreviewElement(previewItem);
 
-                FrameworkElement previewElement = null;
-                if (previewItem is IWpfDifferenceViewer)
+                // no preview element
+                if (previewElement == null)
                 {
-                    _previewDiffViewer = (IWpfDifferenceViewer)previewItem;
-                    previewElement = _previewDiffViewer.VisualElement;
-                    PreviewDockPanel.Background = _previewDiffViewer.InlineView.Background;
-                }
-                else if (previewItem is string)
-                {
-                    previewElement = GetPreviewForString((string)previewItem, createBorder: previewItems.Count == 0);
-                }
-                else if (previewItem is FrameworkElement)
-                {
-                    previewElement = (FrameworkElement)previewItem;
+                    continue;
                 }
 
-                var rowDefinition = i == 0 ? new RowDefinition() : new RowDefinition() { Height = GridLength.Auto };
-                grid.RowDefinitions.Add(rowDefinition);
+                // the very first preview
+                if (grid.RowDefinitions.Count == 0)
+                {
+                    grid.RowDefinitions.Add(new RowDefinition());
+                }
+                else
+                {
+                    grid.RowDefinitions.Add(new RowDefinition() { Height = GridLength.Auto });
+                }
 
-                Grid.SetRow(previewElement, grid.RowDefinitions.IndexOf(rowDefinition));
+                // set row position of the element
+                Grid.SetRow(previewElement, grid.RowDefinitions.Count - 1);
+
+                // add the element to the grid
                 grid.Children.Add(previewElement);
 
-                if (i == 0)
+                // set width of the grid same as the first element
+                if (grid.Children.Count == 1)
                 {
                     grid.Width = previewElement.Width;
                 }
             }
 
-            var preview = grid.Children.Count == 0 ? (FrameworkElement)grid.Children[0] : grid;
-            return preview;
+            if (grid.Children.Count == 0)
+            {
+                // no preview
+                return null;
+            }
+
+            // if there is only 1 item, just take preview element as it is without grid
+            if (grid.Children.Count == 1)
+            {
+                var preview = grid.Children[0];
+
+                // we need to take it out from visual tree
+                grid.Children.Clear();
+
+                return (FrameworkElement)preview;
+            }
+
+            return grid;
+        }
+
+        private FrameworkElement GetPreviewElement(object previewItem)
+        {
+            if (previewItem is DifferenceViewerPreview)
+            {
+                // Contract is there should be only 1 diff viewer, otherwise we leak.
+                Contract.ThrowIfFalse(_differenceViewerPreview == null);
+
+                // cache the diff viewer so that we can close it when panel goes away.
+                // this is a bit wierd since we are mutating state here.
+                _differenceViewerPreview = (DifferenceViewerPreview)previewItem;
+                PreviewDockPanel.Background = _differenceViewerPreview.Viewer.InlineView.Background;
+
+                var previewElement = _differenceViewerPreview.Viewer.VisualElement;
+                return previewElement;
+            }
+
+            if (previewItem is string s)
+            {
+                return GetPreviewForString(s);
+            }
+
+            if (previewItem is FrameworkElement frameworkElement)
+            {
+                return frameworkElement;
+            }
+
+            // preview item we don't know how to show to users
+            return null;
         }
 
         private void InitializeHyperlinks(Uri helpLink, string helpLinkToolTipText)
         {
-            IdHyperlink.SetVSHyperLinkStyle();
-            LearnMoreHyperlink.SetVSHyperLinkStyle();
-
             IdHyperlink.Inlines.Add(_id);
             IdHyperlink.NavigateUri = helpLink;
             IdHyperlink.IsEnabled = true;
             IdHyperlink.ToolTip = helpLinkToolTipText;
 
-            LearnMoreHyperlink.Inlines.Add(string.Format(ServicesVSResources.LearnMoreLinkText, _id));
+            LearnMoreHyperlink.Inlines.Add(string.Format(ServicesVSResources.More_about_0, _id));
             LearnMoreHyperlink.NavigateUri = helpLink;
             LearnMoreHyperlink.ToolTip = helpLinkToolTipText;
         }
 
-        public static FrameworkElement GetPreviewForString(string previewContent, bool useItalicFontStyle = false, bool centerAlignTextHorizontally = false, bool createBorder = false)
+        private static FrameworkElement GetPreviewForString(string previewContent)
         {
-            var textBlock = new TextBlock()
+            return new TextBlock()
             {
                 Margin = new Thickness(5),
                 VerticalAlignment = VerticalAlignment.Center,
                 Text = previewContent,
                 TextWrapping = TextWrapping.Wrap,
             };
-
-            if (useItalicFontStyle)
-            {
-                textBlock.FontStyle = FontStyles.Italic;
-            }
-
-            if (centerAlignTextHorizontally)
-            {
-                textBlock.TextAlignment = TextAlignment.Center;
-            }
-
-            FrameworkElement preview = textBlock;
-            if (createBorder)
-            {
-                preview = new Border()
-                {
-                    Width = 400,
-                    MinHeight = 75,
-                    Child = textBlock
-                };
-            }
-
-            return preview;
         }
 
         // This method adjusts the width of the header section to match that of the preview content
@@ -202,7 +264,9 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.PreviewPane
             }
             else
             {
-                PreviewDockPanel.Measure(availableSize: new Size(previewElement.Width, double.PositiveInfinity));
+                PreviewDockPanel.Measure(availableSize: new Size(
+                    double.IsNaN(previewElement.Width) ? DefaultWidth : previewElement.Width,
+                    double.PositiveInfinity));
                 headerStackPanelWidth = PreviewDockPanel.DesiredSize.Width;
                 if (IsNormal(headerStackPanelWidth))
                 {
@@ -247,28 +311,13 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.PreviewPane
             }
         }
 
-        #region IDisposable Implementation
-        private bool _disposedValue = false;
-
-        // VS editor will call Dispose at which point we should Close() the embedded IWpfDifferenceViewer.
-        protected virtual void Dispose(bool disposing)
-        {
-            if (!_disposedValue)
-            {
-                if (disposing && (_previewDiffViewer != null) && !_previewDiffViewer.IsClosed)
-                {
-                    _previewDiffViewer.Close();
-                }
-            }
-
-            _disposedValue = true;
-        }
-
+        private readonly Guid _optionPageGuid;
         void IDisposable.Dispose()
         {
-            Dispose(true);
+            // VS editor will call Dispose at which point we should Close() the embedded IWpfDifferenceViewer.
+            _differenceViewerPreview?.Dispose();
+            _differenceViewerPreview = null;
         }
-        #endregion
 
         private void LearnMoreHyperlink_RequestNavigate(object sender, RequestNavigateEventArgs e)
         {
@@ -317,6 +366,18 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.PreviewPane
                 DescriptionDockPanel.Visibility = Visibility.Collapsed;
 
                 _isExpanded = false;
+            }
+        }
+
+        private void OptionsButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_optionPageGuid != default)
+            {
+                ErrorHandler.ThrowOnFailure(_uiShell.PostExecCommand(
+                    VSConstants.GUID_VSStandardCommandSet97,
+                    (uint)VSConstants.VSStd97CmdID.ToolsOptions,
+                    (uint)OLECMDEXECOPT.OLECMDEXECOPT_DODEFAULT,
+                    _optionPageGuid.ToString()));
             }
         }
     }

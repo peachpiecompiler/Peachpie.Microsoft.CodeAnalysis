@@ -1,4 +1,4 @@
-' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 Imports Microsoft.CodeAnalysis.Editor.UnitTests.Utilities.GoToHelpers
 Imports Microsoft.CodeAnalysis.Navigation
@@ -6,12 +6,18 @@ Imports Microsoft.CodeAnalysis.Rename.ConflictEngine
 Imports Microsoft.VisualStudio.Text
 
 Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Rename
+    <[UseExportProvider]>
     Public Class RenameNonRenameableSymbols
+        Private ReadOnly _outputHelper As Abstractions.ITestOutputHelper
+
+        Public Sub New(outputHelper As Abstractions.ITestOutputHelper)
+            _outputHelper = outputHelper
+        End Sub
 
         <Fact>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub CannotRenameInheritedMetadataButRenameCascade()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                     <Workspace>
                         <Project Language="C#" CommonReferences="true">
                             <Document>
@@ -48,7 +54,7 @@ Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Rename
         <Fact>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         Public Sub RenameEventWithInvalidNames()
-            Using result = RenameEngineResult.Create(
+            Using result = RenameEngineResult.Create(_outputHelper,
                     <Workspace>
                         <Project Language="C#" CommonReferences="true">
                             <Document>
@@ -348,11 +354,11 @@ class Program
                     <Workspace>
                         <Project Language="C#" CommonReferences="true">
                             <Document>
-                                extern alias foo; // foo is unresolved
+                                extern alias goo; // goo is unresolved
  
                                 class A
                                 {
-                                    object x = new $$foo::X();
+                                    object x = new $$goo::X();
                                 }
                             </Document>
                         </Project>
@@ -369,10 +375,10 @@ class Program
             Using workspace = CreateWorkspaceWithWaiter(
                     <Workspace>
                         <Submission Language="C#" CommonReferences="true">
-                            int foo;
+                            int goo;
                         </Submission>
                         <Submission Language="C#" CommonReferences="true">
-                            $$foo = 42;
+                            $$goo = 42;
                         </Submission>
                     </Workspace>)
 
@@ -477,5 +483,222 @@ End Class
                 AssertTokenNotRenamable(workspace)
             End Using
         End Sub
+
+#Region "Rename In Tuples"
+
+        <WorkItem(10898, "https://github.com/dotnet/roslyn/issues/10898")>
+        <WorkItem(10567, "https://github.com/dotnet/roslyn/issues/10567")>
+        <WpfFact>
+        <Trait(Traits.Feature, Traits.Features.Rename)>
+        <Test.Utilities.CompilerTrait(Test.Utilities.CompilerFeature.Tuples)>
+        Public Sub RenameTupleFiledInDeclaration()
+
+            Using workspace = CreateWorkspaceWithWaiter(
+                    <Workspace>
+                        <Project Language="C#" CommonReferences="true" PreprocessorSymbols="__DEMO__">
+                            <Document>
+using System;
+
+class C
+{
+    static void Main()
+    {
+        (int $$Alice, int Bob) t = (1, 2);
+        t.Alice = 3;
+    }
+}
+
+namespace System
+{
+    // struct with two values
+    public struct ValueTuple&lt;T1, T2&gt;
+    {
+        public T1 Item1;
+        public T2 Item2;
+
+        public ValueTuple(T1 item1, T2 item2)
+        {
+            this.Item1 = item1;
+            this.Item2 = item2;
+        }
+
+        public override string ToString()
+        {
+            return '{' + Item1?.ToString() + ", " + Item2?.ToString() + '}';
+        }
+    }
+}
+                            </Document>
+                        </Project>
+                    </Workspace>)
+
+                ' NOTE: this is currently intentionally blocked
+                '       see https://github.com/dotnet/roslyn/issues/10898
+                AssertTokenNotRenamable(workspace)
+            End Using
+
+        End Sub
+
+        <WorkItem(10898, "https://github.com/dotnet/roslyn/issues/10898")>
+        <WorkItem(10567, "https://github.com/dotnet/roslyn/issues/10567")>
+        <WpfFact>
+        <Trait(Traits.Feature, Traits.Features.Rename)>
+        <Test.Utilities.CompilerTrait(Test.Utilities.CompilerFeature.Tuples)>
+        Public Sub RenameTupleFiledInLiteral()
+            Using workspace = CreateWorkspaceWithWaiter(
+                   <Workspace>
+                       <Project Language="C#" CommonReferences="true" PreprocessorSymbols="__DEMO__">
+                           <Document>
+using System;
+
+class C
+{
+    static void Main()
+    {
+        var t = ($$Alice: 1, Bob: 2);
+        t.Alice = 3;
+    }
+}
+
+
+
+namespace System
+{
+    // struct with two values
+    public struct ValueTuple&lt;T1, T2&gt;
+    {
+        public T1 Item1;
+        public T2 Item2;
+
+        public ValueTuple(T1 item1, T2 item2)
+        {
+            this.Item1 = item1;
+            this.Item2 = item2;
+        }
+
+        public override string ToString()
+        {
+            return '{' + Item1?.ToString() + ", " + Item2?.ToString() + '}';
+        }
+    }
+}
+                            </Document>
+                       </Project>
+                   </Workspace>)
+
+                ' NOTE: this is currently intentionally blocked
+                '       see https://github.com/dotnet/roslyn/issues/10898
+                AssertTokenNotRenamable(workspace)
+            End Using
+        End Sub
+
+        <WorkItem(10898, "https://github.com/dotnet/roslyn/issues/10898")>
+        <WorkItem(10567, "https://github.com/dotnet/roslyn/issues/10567")>
+        <WpfFact>
+        <Trait(Traits.Feature, Traits.Features.Rename)>
+        <Test.Utilities.CompilerTrait(Test.Utilities.CompilerFeature.Tuples)>
+        Public Sub RenameTupleFiledInFieldAccess()
+            Using workspace = CreateWorkspaceWithWaiter(
+       <Workspace>
+           <Project Language="C#" CommonReferences="true" PreprocessorSymbols="__DEMO__">
+               <Document>
+using System;
+
+class C
+{
+    static void Main()
+    {
+        var t = (Alice: 1, Bob: 2);
+        t.$$Alice = 3;
+    }
+}
+
+namespace System
+{
+    // struct with two values
+    public struct ValueTuple&lt;T1, T2&gt;
+    {
+        public T1 Item1;
+        public T2 Item2;
+
+        public ValueTuple(T1 item1, T2 item2)
+        {
+            this.Item1 = item1;
+            this.Item2 = item2;
+        }
+
+        public override string ToString()
+        {
+            return '{' + Item1?.ToString() + ", " + Item2?.ToString() + '}';
+        }
+    }
+}
+                            </Document>
+           </Project>
+       </Workspace>)
+
+                ' NOTE: this is currently intentionally blocked
+                '       see https://github.com/dotnet/roslyn/issues/10898
+                AssertTokenNotRenamable(workspace)
+            End Using
+
+        End Sub
+
+        <WorkItem(10567, "https://github.com/dotnet/roslyn/issues/14600")>
+        <WpfFact>
+        <Trait(Traits.Feature, Traits.Features.Rename)>
+        <Test.Utilities.CompilerTrait(Test.Utilities.CompilerFeature.Tuples)>
+        Public Sub RenameTupleFiledInLiteralRegress14600()
+            Using workspace = CreateWorkspaceWithWaiter(
+                   <Workspace>
+                       <Project Language="C#" CommonReferences="true" PreprocessorSymbols="__DEMO__">
+                           <Document>
+using System;
+
+class Program
+{
+    static void Main(string[] args)
+    {
+        var x = (Program: 1, Bob: 2);
+
+        var Alice = x.$$Program;                
+    }
+
+}
+
+
+
+namespace System
+{
+    // struct with two values
+    public struct ValueTuple&lt;T1, T2&gt;
+    {
+        public T1 Item1;
+        public T2 Item2;
+
+        public ValueTuple(T1 item1, T2 item2)
+        {
+            this.Item1 = item1;
+            this.Item2 = item2;
+        }
+
+        public override string ToString()
+        {
+            return '{' + Item1?.ToString() + ", " + Item2?.ToString() + '}';
+        }
+    }
+}
+                            </Document>
+                       </Project>
+                   </Workspace>)
+
+                ' NOTE: this is currently intentionally blocked
+                '       see https://github.com/dotnet/roslyn/issues/10898
+                AssertTokenNotRenamable(workspace)
+            End Using
+        End Sub
+
+#End Region
+
     End Class
 End Namespace

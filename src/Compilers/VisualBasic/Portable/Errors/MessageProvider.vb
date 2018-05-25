@@ -7,20 +7,26 @@ Imports Microsoft.CodeAnalysis.VisualBasic.Syntax
 Namespace Microsoft.CodeAnalysis.VisualBasic
     Friend NotInheritable Class MessageProvider
         Inherits CommonMessageProvider
-        Implements IObjectWritable, IObjectReadable
+        Implements IObjectWritable
 
         Public Shared ReadOnly Instance As MessageProvider = New MessageProvider()
+
+        Shared Sub New()
+            ObjectBinder.RegisterTypeReader(GetType(MessageProvider), Function(r) Instance)
+        End Sub
 
         Private Sub New()
         End Sub
 
+        Private ReadOnly Property IObjectWritable_ShouldReuseInSerialization As Boolean Implements IObjectWritable.ShouldReuseInSerialization
+            Get
+                Return True
+            End Get
+        End Property
+
         Private Sub WriteTo(writer As ObjectWriter) Implements IObjectWritable.WriteTo
             ' don't write anything since we always return the shared 'Instance' when read.
         End Sub
-
-        Private Function GetReader() As Func(Of ObjectReader, Object) Implements IObjectReadable.GetReader
-            Return Function(r) Instance
-        End Function
 
         Public Overrides ReadOnly Property CodePrefix As String
             Get
@@ -95,26 +101,13 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
             Return New VBDiagnostic(ErrorFactory.ErrorInfo(CType(code, ERRID), args), location)
         End Function
 
-        Public Overrides Function ConvertSymbolToString(errorCode As Integer, symbol As ISymbol) As String
+        Public Overrides Function CreateDiagnostic(info As DiagnosticInfo) As Diagnostic
+            Return New VBDiagnostic(info, Location.None)
+        End Function
+
+        Public Overrides Function GetErrorDisplayString(symbol As ISymbol) As String
             ' show extra info for assembly if possible such as version, public key token etc.
             If symbol.Kind = SymbolKind.Assembly OrElse symbol.Kind = SymbolKind.Namespace Then
-                Return symbol.ToString()
-            End If
-
-            ' cases where we actually want fully qualified name
-            If errorCode = ERRID.ERR_AmbiguousAcrossInterfaces3 OrElse
-               errorCode = ERRID.ERR_TypeConflict6 OrElse
-               errorCode = ERRID.ERR_ExportedTypesConflict OrElse
-               errorCode = ERRID.ERR_ForwardedTypeConflictsWithDeclaration OrElse
-               errorCode = ERRID.ERR_ForwardedTypeConflictsWithExportedType OrElse
-               errorCode = ERRID.ERR_ForwardedTypesConflict Then
-                Return symbol.ToString()
-            End If
-
-            ' show fully qualified name for missing special types
-            If errorCode = ERRID.ERR_UnreferencedAssembly3 AndAlso
-               TypeOf symbol Is ITypeSymbol AndAlso
-               DirectCast(symbol, ITypeSymbol).SpecialType <> SpecialType.None Then
                 Return symbol.ToString()
             End If
 
@@ -245,11 +238,31 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
             End Get
         End Property
 
+        ' parse options:
+
+        Public Overrides ReadOnly Property ERR_BadSourceCodeKind As Integer
+            Get
+                Return ERRID.ERR_BadSourceCodeKind
+            End Get
+        End Property
+
+        Public Overrides ReadOnly Property ERR_BadDocumentationMode As Integer
+            Get
+                Return ERRID.ERR_BadDocumentationMode
+            End Get
+        End Property
+
         ' compilation options:
 
         Public Overrides ReadOnly Property ERR_BadCompilationOptionValue As Integer
             Get
                 Return ERRID.ERR_InvalidSwitchValue
+            End Get
+        End Property
+
+        Public Overrides ReadOnly Property ERR_MutuallyExclusiveOptions As Integer
+            Get
+                Return ERRID.ERR_MutuallyExclusiveOptions
             End Get
         End Property
 
@@ -279,6 +292,17 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
             End Get
         End Property
 
+        Public Overrides ReadOnly Property ERR_InvalidHashAlgorithmName As Integer
+            Get
+                Return ERRID.ERR_InvalidHashAlgorithmName
+            End Get
+        End Property
+
+        Public Overrides ReadOnly Property ERR_InvalidInstrumentationKind As Integer
+            Get
+                Return ERRID.ERR_InvalidInstrumentationKind
+            End Get
+        End Property
 
         ' reference manager:
         Public Overrides ReadOnly Property ERR_MetadataFileNotAssembly As Integer
@@ -365,6 +389,12 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
         Public Overrides ReadOnly Property ERR_PublicKeyContainerFailure As Integer
             Get
                 Return ERRID.ERR_PublicKeyContainerFailure
+            End Get
+        End Property
+
+        Public Overrides ReadOnly Property ERR_OptionMustBeAbsolutePath As Integer
+            Get
+                Return ERRID.ERR_OptionMustBeAbsolutePath
             End Get
         End Property
 
@@ -461,6 +491,12 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
         End Sub
 
         ' PDB Writer
+        Public Overrides ReadOnly Property ERR_EncodinglessSyntaxTree As Integer
+            Get
+                Return ERRID.ERR_EncodinglessSyntaxTree
+            End Get
+        End Property
+
         Public Overrides ReadOnly Property WRN_PdbUsingNameTooLong As Integer
             Get
                 Return ERRID.WRN_PdbUsingNameTooLong
@@ -495,6 +531,36 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
         Public Overrides ReadOnly Property ERR_TooManyUserStrings As Integer
             Get
                 Return ERRID.ERR_TooManyUserStrings
+            End Get
+        End Property
+
+        Public Overrides ReadOnly Property ERR_PeWritingFailure As Integer
+            Get
+                Return ERRID.ERR_PeWritingFailure
+            End Get
+        End Property
+
+        Public Overrides ReadOnly Property ERR_ModuleEmitFailure As Integer
+            Get
+                Return ERRID.ERR_ModuleEmitFailure
+            End Get
+        End Property
+
+        Public Overrides ReadOnly Property ERR_EncUpdateFailedMissingAttribute As Integer
+            Get
+                Return ERRID.ERR_EncUpdateFailedMissingAttribute
+            End Get
+        End Property
+
+        Public Overrides ReadOnly Property ERR_BadAssemblyName As Integer
+            Get
+                Return ERRID.ERR_BadAssemblyName
+            End Get
+        End Property
+
+        Public Overrides ReadOnly Property ERR_InvalidDebugInfo As Integer
+            Get
+                Return ERRID.ERR_InvalidDebugInfo
             End Get
         End Property
     End Class

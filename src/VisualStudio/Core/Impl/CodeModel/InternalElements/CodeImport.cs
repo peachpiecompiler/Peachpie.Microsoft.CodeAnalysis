@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Diagnostics;
@@ -60,24 +60,26 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.CodeModel.Inter
             _dottedName = dottedName;
         }
 
-        internal override SyntaxNode LookupNode()
+        internal override bool TryLookupNode(out SyntaxNode node)
         {
+            node = null;
+
             var parentNode = _parentHandle.Value != null
                 ? _parentHandle.Value.LookupNode()
                 : FileCodeModel.GetSyntaxRoot();
 
             if (parentNode == null)
             {
-                throw Exceptions.ThrowEFail();
+                return false;
             }
 
-            SyntaxNode importNode;
-            if (!CodeModelService.TryGetImportNode(parentNode, _dottedName, out importNode))
+            if (!CodeModelService.TryGetImportNode(parentNode, _dottedName, out var importNode))
             {
-                throw Exceptions.ThrowEFail();
+                return false;
             }
 
-            return importNode;
+            node = importNode;
+            return node != null;
         }
 
         internal override ISymbol LookupSymbol()
