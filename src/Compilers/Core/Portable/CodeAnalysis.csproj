@@ -14,6 +14,14 @@
     <CodeAnalysisRuleSet>..\CodeAnalysisRules.ruleset</CodeAnalysisRuleSet>
     <NoStdLib>true</NoStdLib>
   </PropertyGroup>
+  <PropertyGroup>
+    <PackageVersion>0.9.0</PackageVersion>
+    <Authors>Microsoft, Peachpie, Jakub Misek, Robert Husak</Authors>
+    <Description>Roslyn CodeAnalysis slightly modified to be used by Peachpie.</Description>
+    <PackageTags>php;peachpie;dotnet;compiler;roslyn</PackageTags>
+    <RepositoryUrl>https://github.com/iolevel/Peachpie.Microsoft.CodeAnalysis</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/iolevel/Peachpie.Microsoft.CodeAnalysis</PackageProjectUrl>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|AnyCPU'" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|AnyCPU'" />
   <ItemGroup>

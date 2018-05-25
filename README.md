@@ -1,7 +1,7 @@
 ## Modifications to dotnet/roslyn
 
 - InternalsVisibleTo.cs // so internal declarations are visible to Peachpie compiler
-- Peachpie.Microsoft.CodeAnalysis.nuspec // to create our nuget package to be referenced by Peachpie
+- CodeAnalysis.csproj // to include InternalsVisibleTo.cs and create our nuget package to be referenced by Peachpie
 
 ## Reason
 
