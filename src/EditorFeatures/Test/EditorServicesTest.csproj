@@ -8,7 +8,7 @@
     <OutputType>Library</OutputType>
     <RootNamespace>Microsoft.CodeAnalysis.Editor.UnitTests</RootNamespace>
     <AssemblyName>Roslyn.Services.Editor.UnitTests</AssemblyName>
-    <TargetFramework>net461</TargetFramework>
+    <TargetFramework>net46</TargetFramework>
     <RuntimeIdentifier>$(RoslynDesktopRuntimeIdentifier)</RuntimeIdentifier>
     <RoslynProjectType>UnitTest</RoslynProjectType>
   </PropertyGroup>
@@ -43,7 +43,6 @@
     <ProjectReference Include="..\TestUtilities\ServicesTestUtilities.csproj" />
     <ProjectReference Include="..\..\Scripting\VisualBasic\BasicScripting.vbproj" />
     <ProjectReference Include="..\..\Scripting\CSharp\CSharpScripting.csproj" />
-    <ProjectReference Include="..\..\Interactive\Host\InteractiveHost.csproj" />
     <ProjectReference Include="..\..\Workspaces\Remote\Core\RemoteWorkspaces.csproj" />
     <ProjectReference Include="..\..\Workspaces\Remote\ServiceHub\ServiceHub.csproj" />
   </ItemGroup>
