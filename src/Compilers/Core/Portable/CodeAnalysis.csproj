@@ -21,6 +21,7 @@
     <PackageTags>php;peachpie;dotnet;compiler;roslyn</PackageTags>
     <RepositoryUrl>https://github.com/iolevel/Peachpie.Microsoft.CodeAnalysis</RepositoryUrl>
     <PackageProjectUrl>https://github.com/iolevel/Peachpie.Microsoft.CodeAnalysis</PackageProjectUrl>
+    <SignPeachpie>true</SignPeachpie>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|AnyCPU'" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|AnyCPU'" />
