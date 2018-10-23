@@ -45,6 +45,11 @@
             <PublicKey>$(PeachpieKey)</PublicKey>
             <PublicKeyToken>5b4bee2bf1f98593</PublicKeyToken>
           </PropertyGroup>
+          <!-- Real-signing cross-platform currently has a blocking bug:
+               https://github.com/dotnet/roslyn/issues/23521 -->
+          <PropertyGroup Condition="'$(OS)' != 'Windows_NT'">
+              <PublicSign>true</PublicSign>
+          </PropertyGroup>
         </When>
         
         <!-- Shipping binaries are always public signed.  In the case of an official build $(OfficialBuild) the
