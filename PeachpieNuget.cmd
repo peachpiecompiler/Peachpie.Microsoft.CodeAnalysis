@@ -1,2 +1,2 @@
-REM Run Restore.cmd before running this command (it cannot be run from here, because for some reason it shuts the whole batch down)
-.\Binaries\Tools\dotnet\dotnet.exe pack -c Release .\src\Compilers\Core\Portable\CodeAnalysis.csproj
+REM Expects .NET Core SDK listed in global.json to be installed (other versions might work as well, but it was tested with this one)
+dotnet pack -c Release .\src\Compilers\Core\Portable\CodeAnalysis.csproj
