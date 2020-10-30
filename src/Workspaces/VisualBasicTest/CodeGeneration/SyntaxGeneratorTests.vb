@@ -1,7 +1,10 @@
-﻿' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿' Licensed to the .NET Foundation under one or more agreements.
+' The .NET Foundation licenses this file to you under the MIT license.
+' See the LICENSE file in the project root for more information.
 
 Imports System.Globalization
 Imports Microsoft.CodeAnalysis.Editing
+Imports Microsoft.CodeAnalysis.Shared.Extensions
 Imports Microsoft.CodeAnalysis.Test.Utilities
 Imports Microsoft.CodeAnalysis.VisualBasic.Syntax
 Imports Roslyn.Test.Utilities
@@ -14,7 +17,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.UnitTests.Editting
 
         Private ReadOnly _emptyCompilation As VisualBasicCompilation = VisualBasicCompilation.Create("empty", references:={TestReferences.NetFx.v4_0_30319.mscorlib, TestReferences.NetFx.v4_0_30319.System})
 
-        Private _ienumerableInt As INamedTypeSymbol
+        Private ReadOnly _ienumerableInt As INamedTypeSymbol
 
         Public Sub New()
             Me._ienumerableInt = _emptyCompilation.GetSpecialType(SpecialType.System_Collections_Generic_IEnumerable_T).Construct(_emptyCompilation.GetSpecialType(SpecialType.System_Int32))
@@ -30,24 +33,24 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.UnitTests.Editting
             End Get
         End Property
 
-        Public Function Compile(code As String) As Compilation
+        Public Shared Function Compile(code As String) As Compilation
             Return VisualBasicCompilation.Create("test").AddReferences(TestReferences.NetFx.v4_0_30319.mscorlib).AddSyntaxTrees(SyntaxFactory.ParseSyntaxTree(code))
         End Function
 
-        Private Sub VerifySyntax(Of TSyntax As SyntaxNode)(type As SyntaxNode, expectedText As String)
+        Private Shared Sub VerifySyntax(Of TSyntax As SyntaxNode)(type As SyntaxNode, expectedText As String)
             Assert.IsAssignableFrom(GetType(TSyntax), type)
             Dim normalized = type.NormalizeWhitespace().ToFullString()
             Dim fixedExpectations = expectedText.Replace(vbCrLf, vbLf).Replace(vbLf, vbCrLf)
             Assert.Equal(fixedExpectations, normalized)
         End Sub
 
-        Private Sub VerifySyntaxRaw(Of TSyntax As SyntaxNode)(type As SyntaxNode, expectedText As String)
+        Private Shared Sub VerifySyntaxRaw(Of TSyntax As SyntaxNode)(type As SyntaxNode, expectedText As String)
             Assert.IsAssignableFrom(GetType(TSyntax), type)
             Dim text = type.ToFullString()
             Assert.Equal(expectedText, text)
         End Sub
 
-        Private Function ParseCompilationUnit(text As String) As CompilationUnitSyntax
+        Private Shared Function ParseCompilationUnit(text As String) As CompilationUnitSyntax
             Dim fixedText = text.Replace(vbLf, vbCrLf)
             Return SyntaxFactory.ParseCompilationUnit(fixedText)
         End Function
@@ -202,7 +205,7 @@ End Class
 
         End Sub
 
-        Private Function GetAttributeData(decl As String, use As String) As AttributeData
+        Private Shared Function GetAttributeData(decl As String, use As String) As AttributeData
             Dim code = decl & vbCrLf & use & vbCrLf & "Public Class C " & vbCrLf & "End Class" & vbCrLf
             Dim compilation = Compile(code)
             Dim typeC = DirectCast(compilation.GlobalNamespace.GetMembers("C").First, INamedTypeSymbol)
@@ -253,8 +256,8 @@ End Class
             VerifySyntax(Of TupleElementSyntax)(Generator.TupleElementExpression(intType), "System.Int32")
             VerifySyntax(Of TupleElementSyntax)(Generator.TupleElementExpression(intType, "y"), "y As System.Int32")
             VerifySyntax(Of TypeSyntax)(Generator.TupleTypeExpression(Generator.TupleElementExpression(Generator.IdentifierName("x")), Generator.TupleElementExpression(Generator.IdentifierName("y"))), "(x, y)")
-            VerifySyntax(Of TypeSyntax)(Generator.TupleTypeExpression(new ITypeSymbol() { intType, intType }), "(System.Int32, System.Int32)")
-            VerifySyntax(Of TypeSyntax)(Generator.TupleTypeExpression(new ITypeSymbol() { intType, intType }, New String() { "x", "y" }), "(x As System.Int32, y As System.Int32)")
+            VerifySyntax(Of TypeSyntax)(Generator.TupleTypeExpression(New ITypeSymbol() {intType, intType}), "(System.Int32, System.Int32)")
+            VerifySyntax(Of TypeSyntax)(Generator.TupleTypeExpression(New ITypeSymbol() {intType, intType}, New String() {"x", "y"}), "(x As System.Int32, y As System.Int32)")
         End Sub
 
         <Fact>
@@ -550,8 +553,6 @@ End If")
 
         <Fact>
         Public Sub TestSwitchStatements()
-            Dim x = 10
-
             VerifySyntax(Of SelectBlockSyntax)(
                 Generator.SwitchStatement(Generator.IdentifierName("x"),
                     Generator.SwitchSection(Generator.IdentifierName("y"),
@@ -784,6 +785,39 @@ End Sub")
                 Generator.VoidReturningLambdaExpression({Generator.LambdaParameter("x", Generator.IdentifierName("y")), Generator.LambdaParameter("a", Generator.IdentifierName("b"))}, Generator.IdentifierName("z")),
                 "Sub(x As y, a As b) z")
         End Sub
+
+        <Fact, WorkItem(31720, "https://github.com/dotnet/roslyn/issues/31720")>
+        Public Sub TestGetAttributeOnMethodBodies()
+            Dim compilation = Compile("
+Imports System
+<AttributeUsage(System.AttributeTargets.All)>
+Public Class MyAttribute
+  Inherits Attribute
+End Class
+
+Public Class C
+    <MyAttribute>
+    Sub New()
+    End Sub
+
+    <MyAttribute>
+    Sub M1()
+    End Sub
+
+    <MyAttribute>
+    Function M1() As String
+        Return Nothing
+    End Sub
+End Class
+")
+
+            Dim syntaxTree = compilation.SyntaxTrees(0)
+            Dim declarations = syntaxTree.GetRoot().DescendantNodes().OfType(Of MethodBlockBaseSyntax)
+
+            For Each decl In declarations
+                Assert.Equal("<MyAttribute>", Generator.GetAttributes(decl).Single().ToString())
+            Next
+        End Sub
 #End Region
 
 #Region "Declarations"
@@ -850,7 +884,7 @@ End Function")
 
             VerifySyntax(Of MethodBlockSyntax)(
                 Generator.MethodDeclaration("m", accessibility:=Accessibility.Private, modifiers:=DeclarationModifiers.Partial),
-"Private Partial Sub m()
+"Partial Private Sub m()
 End Sub")
 
         End Sub
@@ -1387,7 +1421,7 @@ End Structure")
 
             VerifySyntax(Of StructureBlockSyntax)(
                 Generator.StructDeclaration("s", accessibility:=Accessibility.Public, modifiers:=DeclarationModifiers.Partial),
-"Public Partial Structure s
+"Partial Public Structure s
 End Structure")
 
             VerifySyntax(Of StructureBlockSyntax)(
@@ -1613,7 +1647,6 @@ End Namespace")
     End Class
 End Namespace")
         End Sub
-
 
         <Fact>
         Public Sub TestCompilationUnits()
@@ -2935,11 +2968,6 @@ End Get")
             Assert.Equal(0, Generator.GetMembers(Generator.RemoveNodes(declaration, Generator.GetMembers(declaration))).Count)
         End Sub
 
-        Private Sub TestRemoveMember(declaration As SyntaxNode, name As String, remainingNames As String())
-            Dim newDecl = Generator.RemoveNode(declaration, Generator.GetMembers(declaration).First(Function(m) Generator.GetName(m) = name))
-            AssertMemberNamesEqual(remainingNames, newDecl)
-        End Sub
-
         <Fact>
         Public Sub TestGetBaseAndInterfaceTypes()
             Dim classBI = SyntaxFactory.ParseCompilationUnit(
@@ -3362,6 +3390,14 @@ End Class")
 
             VerifySyntax(Of ClassBlockSyntax)(
                 Generator.ReplaceNode(declC, declX, Generator.WithName(declX, "Q")),
+"' Comment
+Public Class C
+
+    Public Shared Q, Y, Z As Integer
+End Class")
+
+            VerifySyntax(Of ClassBlockSyntax)(
+                Generator.ReplaceNode(declC, declX.GetAncestorOrThis(Of ModifiedIdentifierSyntax), SyntaxFactory.ModifiedIdentifier("Q")),
 "' Comment
 Public Class C
 

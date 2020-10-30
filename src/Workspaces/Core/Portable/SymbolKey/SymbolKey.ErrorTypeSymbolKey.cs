@@ -1,8 +1,9 @@
-﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
 
-using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Linq;
+using Microsoft.CodeAnalysis.PooledObjects;
 using Roslyn.Utilities;
 
 namespace Microsoft.CodeAnalysis
@@ -14,60 +15,109 @@ namespace Microsoft.CodeAnalysis
             public static void Create(INamedTypeSymbol symbol, SymbolKeyWriter visitor)
             {
                 visitor.WriteString(symbol.Name);
-                visitor.WriteSymbolKey(symbol.ContainingSymbol as INamespaceOrTypeSymbol);
-                visitor.WriteInteger(symbol.Arity);
+                switch (symbol.ContainingSymbol)
+                {
+                    case INamedTypeSymbol parentType:
+                        visitor.WriteInteger(0);
+                        visitor.WriteSymbolKey(parentType);
+                        break;
+                    case INamespaceSymbol parentNamespace:
+                        visitor.WriteInteger(1);
+                        visitor.WriteStringArray(GetContainingNamespaceNamesInReverse(parentNamespace));
+                        break;
+                    default:
+                        visitor.WriteInteger(2);
+                        break;
+                }
 
+                visitor.WriteInteger(symbol.Arity);
                 if (!symbol.Equals(symbol.ConstructedFrom))
                 {
                     visitor.WriteSymbolKeyArray(symbol.TypeArguments);
                 }
                 else
                 {
-                    visitor.WriteSymbolKeyArray(default(ImmutableArray<ITypeSymbol>));
+                    visitor.WriteSymbolKeyArray(ImmutableArray<ITypeSymbol>.Empty);
                 }
+            }
+
+            /// <summary>
+            /// For a symbol like <c>System.Collections.Generic.IEnumerable</c>, this would produce <c>"Generic",
+            /// "Collections", "System"</c>
+            /// </summary>
+            private static ImmutableArray<string> GetContainingNamespaceNamesInReverse(INamespaceSymbol namespaceSymbol)
+            {
+                using var _ = ArrayBuilder<string>.GetInstance(out var builder);
+                while (namespaceSymbol != null && namespaceSymbol.Name != "")
+                {
+                    builder.Add(namespaceSymbol.Name);
+                    namespaceSymbol = namespaceSymbol.ContainingNamespace;
+                }
+
+                return builder.ToImmutable();
             }
 
             public static SymbolKeyResolution Resolve(SymbolKeyReader reader)
             {
                 var name = reader.ReadString();
-                var containingSymbolResolution = reader.ReadSymbolKey();
+                var containingSymbolResolution = ResolveContainer(reader);
                 var arity = reader.ReadInteger();
-                var typeArgumentResolutions = reader.ReadSymbolKeyArray();
 
-                var errorTypes = ResolveErrorTypes(reader, containingSymbolResolution, name, arity);
-
-                if (typeArgumentResolutions.IsDefault)
-                {
-                    return CreateSymbolInfo(errorTypes);
-                }
-
-                var typeArguments = typeArgumentResolutions.Select(
-                    r => GetFirstSymbol<ITypeSymbol>(r)).ToArray();
-                if (typeArguments.Any(s_typeIsNull))
+                using var typeArguments = reader.ReadSymbolKeyArray<ITypeSymbol>();
+                if (typeArguments.IsDefault)
                 {
                     return default;
                 }
 
-                return CreateSymbolInfo(errorTypes.Select(t => t.Construct(typeArguments)));
+                using var result = PooledArrayBuilder<INamedTypeSymbol>.GetInstance();
+
+                var typeArgumentsArray = arity > 0 ? typeArguments.Builder.ToArray() : null;
+                foreach (var container in containingSymbolResolution.OfType<INamespaceOrTypeSymbol>())
+                {
+                    result.AddIfNotNull(Construct(
+                        reader, container, name, arity, typeArgumentsArray));
+                }
+
+                // Always ensure at least one error type was created.
+                if (result.Count == 0)
+                {
+                    result.AddIfNotNull(Construct(
+                        reader, container: null, name, arity, typeArgumentsArray));
+                }
+
+                return CreateResolution(result);
             }
 
-            private static IEnumerable<INamedTypeSymbol> ResolveErrorTypes(
-                SymbolKeyReader reader,
-                SymbolKeyResolution containingSymbolResolution, string name, int arity)
+            private static SymbolKeyResolution ResolveContainer(SymbolKeyReader reader)
             {
-                if (containingSymbolResolution.GetAnySymbol() == null)
+                var type = reader.ReadInteger();
+
+                if (type == 0)
+                    return reader.ReadSymbolKey();
+
+                if (type == 1)
                 {
-                    yield return reader.Compilation.CreateErrorTypeSymbol(null, name, arity);
+                    using var namespaceNames = reader.ReadStringArray();
+                    var currentNamespace = reader.Compilation.GlobalNamespace;
+
+                    // have to walk the namespaces in reverse because that's how we encoded them.
+                    for (var i = namespaceNames.Count - 1; i >= 0; i--)
+                        currentNamespace = reader.Compilation.CreateErrorNamespaceSymbol(currentNamespace, namespaceNames[i]);
+
+                    return new SymbolKeyResolution(currentNamespace);
                 }
-                else
-                {
-                    foreach (var container in containingSymbolResolution.GetAllSymbols().OfType<INamespaceOrTypeSymbol>())
-                    {
-                        yield return reader.Compilation.CreateErrorTypeSymbol(container, name, arity);
-                    }
-                }
+
+                if (type == 2)
+                    return default;
+
+                throw ExceptionUtilities.UnexpectedValue(type);
             }
 
+            private static INamedTypeSymbol Construct(SymbolKeyReader reader, INamespaceOrTypeSymbol container, string name, int arity, ITypeSymbol[] typeArguments)
+            {
+                var result = reader.Compilation.CreateErrorTypeSymbol(container, name, arity);
+                return typeArguments != null ? result.Construct(typeArguments) : result;
+            }
         }
     }
 }

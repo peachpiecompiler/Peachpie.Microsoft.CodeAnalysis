@@ -1,25 +1,28 @@
-﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
 
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using RunTests.Cache;
-using Newtonsoft.Json.Linq;
 using RestSharp;
 using System.Collections.Immutable;
 using Newtonsoft.Json;
-using System.Reflection;
 using System.Diagnostics;
 
 namespace RunTests
 {
     internal sealed partial class Program
     {
+        private static readonly ImmutableHashSet<string> PrimaryProcessNames = ImmutableHashSet.Create(
+            StringComparer.OrdinalIgnoreCase,
+            "devenv",
+            "xunit.console.x86");
+
         internal const int ExitSuccess = 0;
         internal const int ExitFailure = 1;
 
@@ -56,7 +59,7 @@ namespace RunTests
                 return await RunCore(options, cancellationToken);
             }
 
-            var timeoutTask = Task.Delay(options.Timeout.Value);
+            var timeoutTask = Task.Delay(options.Timeout.Value, cancellationToken);
             var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             var runTask = RunCore(options, cts.Token);
 
@@ -102,7 +105,7 @@ namespace RunTests
 
             ConsoleUtil.WriteLine($"Data Storage: {testExecutor.DataStorage.Name}");
             ConsoleUtil.WriteLine($"Proc dump location: {options.ProcDumpDirectory}");
-            ConsoleUtil.WriteLine($"Running {options.Assemblies.Count()} test assemblies in {assemblyInfoList.Count} partitions");
+            ConsoleUtil.WriteLine($"Running {options.Assemblies.Count} test assemblies in {assemblyInfoList.Count} partitions");
 
             var result = await testRunner.RunAllAsync(assemblyInfoList, cancellationToken).ConfigureAwait(true);
             var elapsed = DateTime.Now - start;
@@ -156,7 +159,7 @@ namespace RunTests
 
         private static void WriteLogFile(Options options)
         {
-            var logFilePath = Path.Combine(options.LogsDirectory, "runtests.log");
+            var logFilePath = Path.Combine(options.LogFilesOutputDirectory, "runtests.log");
             try
             {
                 using (var writer = new StreamWriter(logFilePath, append: false))
@@ -198,11 +201,11 @@ namespace RunTests
                     var processOutput = await processInfo.Result;
 
                     // The exit code for procdump doesn't obey standard windows rules.  It will return non-zero
-                    // for succesful cases (possibly returning the count of dumps that were written).  Best 
+                    // for successful cases (possibly returning the count of dumps that were written).  Best 
                     // backup is to test for the dump file being present.
                     if (File.Exists(dumpFilePath))
                     {
-                        ConsoleUtil.WriteLine("succeeded");
+                        ConsoleUtil.WriteLine($"succeeded ({new FileInfo(dumpFilePath).Length} bytes)");
                     }
                     else
                     {
@@ -223,10 +226,12 @@ namespace RunTests
             var procDumpInfo = GetProcDumpInfo(options);
             if (procDumpInfo != null)
             {
-                var dumpDir = procDumpInfo.Value.DumpDirectory;
                 var counter = 0;
                 foreach (var proc in ProcessUtil.GetProcessTree(Process.GetCurrentProcess()).OrderBy(x => x.ProcessName))
                 {
+                    var dumpDir = PrimaryProcessNames.Contains(proc.ProcessName)
+                        ? procDumpInfo.Value.DumpDirectory
+                        : procDumpInfo.Value.SecondaryDumpDirectory;
                     var dumpFilePath = Path.Combine(dumpDir, $"{proc.ProcessName}-{counter}.dmp");
                     await DumpProcess(proc, procDumpInfo.Value.ProcDumpFilePath, dumpFilePath);
                     counter++;
@@ -244,7 +249,7 @@ namespace RunTests
         {
             if (!string.IsNullOrEmpty(options.ProcDumpDirectory))
             {
-                return new ProcDumpInfo(Path.Combine(options.ProcDumpDirectory, "procdump.exe"), options.LogsDirectory);
+                return new ProcDumpInfo(Path.Combine(options.ProcDumpDirectory, "procdump.exe"), options.LogFilesOutputDirectory, options.LogFilesSecondaryOutputDirectory);
             }
 
             return null;
@@ -287,23 +292,7 @@ namespace RunTests
 
             foreach (var assemblyPath in options.Assemblies.OrderByDescending(x => new FileInfo(x).Length))
             {
-                var name = Path.GetFileName(assemblyPath);
-
-                // As a starting point we will just schedule the items we know to be a performance
-                // bottleneck.  Can adjust as we get real data.
-                if (name == "Roslyn.Compilers.CSharp.Emit.UnitTests.dll" ||
-                    name == "Roslyn.Services.Editor.UnitTests.dll" ||
-                    name == "Roslyn.Services.Editor.UnitTests2.dll" ||
-                    name == "Roslyn.VisualStudio.Services.UnitTests.dll" ||
-                    name == "Roslyn.Services.Editor.CSharp.UnitTests.dll" ||
-                    name == "Roslyn.Services.Editor.VisualBasic.UnitTests.dll")
-                {
-                    list.AddRange(scheduler.Schedule(assemblyPath));
-                }
-                else
-                {
-                    list.Add(scheduler.CreateAssemblyInfo(assemblyPath));
-                }
+                list.AddRange(scheduler.Schedule(assemblyPath));
             }
 
             return list;
@@ -351,8 +340,8 @@ namespace RunTests
         {
             var testExecutionOptions = new TestExecutionOptions(
                 xunitPath: options.XunitPath,
-                procDumpInfo: GetProcDumpInfo(options),
-                logsDirectory: options.LogsDirectory,
+                procDumpInfo: options.UseProcDump ? GetProcDumpInfo(options) : null,
+                outputDirectory: options.TestResultXmlOutputDirectory,
                 trait: options.Trait,
                 noTrait: options.NoTrait,
                 useHtml: options.UseHtml,
@@ -373,7 +362,7 @@ namespace RunTests
                 dataStorage = new WebDataStorage();
             }
 
-            return new CachingTestExecutor(testExecutionOptions, processTestExecutor, dataStorage);
+            return new CachingTestExecutor(processTestExecutor, dataStorage);
         }
 
         /// <summary>
@@ -409,7 +398,7 @@ namespace RunTests
             try
             {
                 var client = new RestClient(Constants.DashboardUriString);
-                var response = await client.ExecuteTaskAsync(request);
+                var response = await client.ExecuteTaskAsync(request, cancellationToken);
                 if (response.StatusCode != System.Net.HttpStatusCode.NoContent)
                 {
                     Logger.Log($"Unable to send results: {response.ErrorMessage}");

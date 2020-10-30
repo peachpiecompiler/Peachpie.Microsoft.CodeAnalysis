@@ -1,4 +1,8 @@
-﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
+
+#nullable enable
 
 using System;
 using System.Collections.Generic;
@@ -7,17 +11,15 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis.ErrorReporting;
-using Microsoft.CodeAnalysis.Host;
 using Microsoft.CodeAnalysis.Internal.Log;
 using Microsoft.CodeAnalysis.Notification;
 using Microsoft.CodeAnalysis.Remote.Diagnostics;
-using Microsoft.CodeAnalysis.Remote.Services;
-using Microsoft.CodeAnalysis.Remote.Storage;
 using Microsoft.CodeAnalysis.Serialization;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.VisualStudio.LanguageServices.Telemetry;
@@ -33,16 +35,17 @@ namespace Microsoft.CodeAnalysis.Remote
     /// 
     /// basically, this is used to manage lifetime of the service hub.
     /// </summary>
-    internal partial class RemoteHostService : ServiceHubServiceBase, IRemoteHostService
+    internal partial class RemoteHostService : ServiceBase, IRemoteHostService, IAssetSource
     {
-        private readonly static TimeSpan s_reportInterval = TimeSpan.FromMinutes(2);
+        private static readonly TimeSpan s_reportInterval = TimeSpan.FromMinutes(2);
+        private readonly CancellationTokenSource _shutdownCancellationSource;
 
         // it is saved here more on debugging purpose.
         private static Func<FunctionId, bool> s_logChecker = _ => false;
 
-        private string _host;
-        private int _primaryInstance;
-        private PerformanceReporter _performanceReporter;
+#pragma warning disable IDE0052 // Remove unread private members
+        private PerformanceReporter? _performanceReporter;
+#pragma warning restore
 
         static RemoteHostService()
         {
@@ -53,34 +56,38 @@ namespace Microsoft.CodeAnalysis.Remote
             SetNativeDllSearchDirectories();
         }
 
-        public RemoteHostService(Stream stream, IServiceProvider serviceProvider) :
-            base(serviceProvider, stream)
+        public RemoteHostService(Stream stream, IServiceProvider serviceProvider)
+            : base(serviceProvider, stream)
         {
+            _shutdownCancellationSource = new CancellationTokenSource();
+
             // this service provide a way for client to make sure remote host is alive
-            Rpc.StartListening();
+            StartService();
         }
 
-        public string Connect(string host, int uiCultureLCID, int cultureLCID, string serializedSession, CancellationToken cancellationToken)
+        /// <summary>
+        /// Remote API. Initializes ServiceHub process global state.
+        /// </summary>
+        public void InitializeGlobalState(string host, int uiCultureLCID, int cultureLCID, string? serializedSession, CancellationToken cancellationToken)
         {
-            return RunService(token =>
+            RunService(() =>
             {
-                token.ThrowIfCancellationRequested();
+                // initialize global asset storage
+                AssetStorage.Initialize(this);
 
-                _primaryInstance = InstanceId;
-
-                var existing = Interlocked.CompareExchange(ref _host, host, null);
-
-                SetGlobalContext(uiCultureLCID, cultureLCID, serializedSession);
-
-                if (existing != null && existing != host)
+                // serializedSession may be null for testing
+                if (serializedSession != null)
                 {
-                    LogError($"{host} is given for {existing}");
+                    SetGlobalContext(uiCultureLCID, cultureLCID, serializedSession);
                 }
 
                 // log telemetry that service hub started
-                RoslynLogger.Log(FunctionId.RemoteHost_Connect, KeyValueLogMessage.Create(SetSessionInfo));
+                RoslynLogger.Log(FunctionId.RemoteHost_Connect, KeyValueLogMessage.Create(m =>
+                {
+                    m["Host"] = host;
+                    m["InstanceId"] = InstanceId;
+                }));
 
-                // serializedSession will be null for testing
                 if (serializedSession != null)
                 {
                     // Set this process's priority BelowNormal.
@@ -88,48 +95,52 @@ namespace Microsoft.CodeAnalysis.Remote
                     // host's work such as responsiveness or build.
                     Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.BelowNormal;
                 }
-
-                return _host;
             }, cancellationToken);
         }
 
-        public void UpdateSolutionStorageLocation(SolutionId solutionId, string storageLocation, CancellationToken cancellationToken)
+        Task<ImmutableArray<(Checksum, object)>> IAssetSource.GetAssetsAsync(int scopeId, ISet<Checksum> checksums, ISerializerService serializerService, CancellationToken cancellationToken)
         {
-            RunService(_ =>
+            return RunServiceAsync(() =>
             {
-                var persistentStorageService = GetPersistentStorageService();
-                persistentStorageService.UpdateStorageLocation(solutionId, storageLocation);
+                using (RoslynLogger.LogBlock(FunctionId.RemoteHostService_GetAssetsAsync, (serviceId, checksums) => $"{serviceId} - {Checksum.GetChecksumsLogInfo(checksums)}", scopeId, checksums, cancellationToken))
+                {
+                    return EndPoint.InvokeAsync(
+                        nameof(IRemoteHostServiceCallback.GetAssetsAsync),
+                        new object[] { scopeId, checksums.ToArray() },
+                        (stream, cancellationToken) => Task.FromResult(RemoteHostAssetSerialization.ReadData(stream, scopeId, checksums, serializerService, cancellationToken)),
+                        cancellationToken);
+                }
             }, cancellationToken);
         }
 
-        public void OnGlobalOperationStarted(string unused)
+        // TODO: remove (https://github.com/dotnet/roslyn/issues/43477)
+        Task<bool> IAssetSource.IsExperimentEnabledAsync(string experimentName, CancellationToken cancellationToken)
         {
-            RunService(_ =>
+            return RunServiceAsync(() =>
             {
-                var globalOperationNotificationService = GetGlobalOperationNotificationService();
-                globalOperationNotificationService?.OnStarted();
-            }, CancellationToken.None);
+                using (RoslynLogger.LogBlock(FunctionId.RemoteHostService_IsExperimentEnabledAsync, experimentName, cancellationToken))
+                {
+                    return EndPoint.InvokeAsync<bool>(
+                        nameof(IRemoteHostServiceCallback.IsExperimentEnabledAsync),
+                        new object[] { experimentName },
+                        cancellationToken);
+                }
+            }, cancellationToken);
         }
 
-        public void OnGlobalOperationStopped(IReadOnlyList<string> operations, bool cancelled)
-        {
-            RunService(_ =>
-            {
-                var globalOperationNotificationService = GetGlobalOperationNotificationService();
-                globalOperationNotificationService?.OnStopped(operations, cancelled);
-            }, CancellationToken.None);
-        }
-
+        /// <summary>
+        /// Remote API.
+        /// </summary>
         public void SetLoggingFunctionIds(List<string> loggerTypes, List<string> functionIds, CancellationToken cancellationToken)
         {
-            RunService(token =>
+            RunService(() =>
             {
                 var functionIdType = typeof(FunctionId);
 
                 var set = new HashSet<FunctionId>();
                 foreach (var functionIdString in functionIds)
                 {
-                    token.ThrowIfCancellationRequested();
+                    cancellationToken.ThrowIfCancellationRequested();
 
                     try
                     {
@@ -168,38 +179,27 @@ namespace Microsoft.CodeAnalysis.Remote
             }
         }
 
-        private void SetSessionInfo(Dictionary<string, object> m)
-        {
-            m["Host"] = _host;
-            m["InstanceId"] = _primaryInstance;
-        }
-
         private void SetGlobalContext(int uiCultureLCID, int cultureLCID, string serializedSession)
         {
-            // set global telemetry session
-            var session = GetTelemetrySession(serializedSession);
-            if (session == null)
-            {
-                return;
-            }
+            var session = new TelemetrySession(serializedSession);
+            session.Start();
 
             EnsureCulture(uiCultureLCID, cultureLCID);
 
+            WatsonReporter.InitializeFatalErrorHandlers(session);
+            WatsonReporter.InitializeLogger(Logger);
+
             // set roslyn loggers
-            WatsonReporter.SetTelemetrySession(session);
+            RoslynServices.SetTelemetrySession(session);
 
             RoslynLogger.SetLogger(AggregateLogger.Create(new VSTelemetryLogger(session), RoslynLogger.GetLogger()));
-
-            // set both handler as NFW
-            FatalError.Handler = WatsonReporter.Report;
-            FatalError.NonFatalHandler = WatsonReporter.Report;
 
             // start performance reporter
             var diagnosticAnalyzerPerformanceTracker = SolutionService.PrimaryWorkspace.Services.GetService<IPerformanceTrackerService>();
             if (diagnosticAnalyzerPerformanceTracker != null)
             {
                 var globalOperationNotificationService = SolutionService.PrimaryWorkspace.Services.GetService<IGlobalOperationNotificationService>();
-                _performanceReporter = new PerformanceReporter(Logger, diagnosticAnalyzerPerformanceTracker, globalOperationNotificationService, s_reportInterval, ShutdownCancellationToken);
+                _performanceReporter = new PerformanceReporter(Logger, diagnosticAnalyzerPerformanceTracker, globalOperationNotificationService, s_reportInterval, _shutdownCancellationSource.Token);
             }
         }
 
@@ -222,31 +222,10 @@ namespace Microsoft.CodeAnalysis.Remote
         private static bool ExpectedCultureIssue(Exception ex)
         {
             // report exception
-            WatsonReporter.Report(ex);
+            WatsonReporter.ReportNonFatal(ex);
 
             // ignore expected exception
             return ex is ArgumentOutOfRangeException || ex is CultureNotFoundException;
-        }
-
-        private static TelemetrySession GetTelemetrySession(string serializedSession)
-        {
-            var session = serializedSession != null ? new TelemetrySession(serializedSession) : null;
-
-            // actually starting the session
-            session?.Start();
-
-            return session;
-        }
-
-        private RemotePersistentStorageLocationService GetPersistentStorageService()
-        {
-            return (RemotePersistentStorageLocationService)SolutionService.PrimaryWorkspace.Services.GetService<IPersistentStorageLocationService>();
-        }
-
-        private RemoteGlobalOperationNotificationService GetGlobalOperationNotificationService()
-        {
-            var notificationService = SolutionService.PrimaryWorkspace.Services.GetService<IGlobalOperationNotificationService>() as RemoteGlobalOperationNotificationService;
-            return notificationService;
         }
 
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
@@ -282,39 +261,29 @@ namespace Microsoft.CodeAnalysis.Remote
             }
         }
 
-        public Task SynchronizePrimaryWorkspaceAsync(Checksum checksum, CancellationToken cancellationToken)
+        /// <summary>
+        /// Remote API.
+        /// </summary>
+        public Task SynchronizePrimaryWorkspaceAsync(PinnedSolutionInfo solutionInfo, Checksum checksum, int workspaceVersion, CancellationToken cancellationToken)
         {
-            return RunServiceAsync(async token =>
+            return RunServiceAsync(async () =>
             {
-                using (RoslynLogger.LogBlock(FunctionId.RemoteHostService_SynchronizePrimaryWorkspaceAsync, Checksum.GetChecksumLogInfo, checksum, token))
+                using (RoslynLogger.LogBlock(FunctionId.RemoteHostService_SynchronizePrimaryWorkspaceAsync, Checksum.GetChecksumLogInfo, checksum, cancellationToken))
                 {
-                    var solutionController = (ISolutionController)RoslynServices.SolutionService;
-                    await solutionController.UpdatePrimaryWorkspaceAsync(checksum, token).ConfigureAwait(false);
+                    var solutionService = CreateSolutionService(solutionInfo);
+                    await solutionService.UpdatePrimaryWorkspaceAsync(checksum, workspaceVersion, cancellationToken).ConfigureAwait(false);
                 }
             }, cancellationToken);
         }
 
-        public Task SynchronizeGlobalAssetsAsync(Checksum[] checksums, CancellationToken cancellationToken)
-        {
-            return RunServiceAsync(async token =>
-            {
-                using (RoslynLogger.LogBlock(FunctionId.RemoteHostService_SynchronizeGlobalAssetsAsync, Checksum.GetChecksumsLogInfo, checksums, token))
-                {
-                    var assets = await RoslynServices.AssetService.GetAssetsAsync<object>(checksums, token).ConfigureAwait(false);
-
-                    foreach (var asset in assets)
-                    {
-                        AssetStorage.TryAddGlobalAsset(asset.Item1, asset.Item2);
-                    }
-                }
-            }, cancellationToken);
-        }
-
+        /// <summary>
+        /// Remote API.
+        /// </summary>
         public Task SynchronizeTextAsync(DocumentId documentId, Checksum baseTextChecksum, IEnumerable<TextChange> textChanges, CancellationToken cancellationToken)
         {
-            return RunServiceAsync(async token =>
+            return RunServiceAsync(async () =>
             {
-                using (RoslynLogger.LogBlock(FunctionId.RemoteHostService_SynchronizeTextAsync, Checksum.GetChecksumLogInfo, baseTextChecksum, token))
+                using (RoslynLogger.LogBlock(FunctionId.RemoteHostService_SynchronizeTextAsync, Checksum.GetChecksumLogInfo, baseTextChecksum, cancellationToken))
                 {
                     var service = SolutionService.PrimaryWorkspace.Services.GetService<ISerializerService>();
                     if (service == null)
@@ -331,7 +300,7 @@ namespace Microsoft.CodeAnalysis.Remote
                     }
 
                     var newText = new WrappedText(text.WithChanges(textChanges));
-                    var newChecksum = service.CreateChecksum(newText, token);
+                    var newChecksum = service.CreateChecksum(newText, cancellationToken);
 
                     // save new text in the cache so that when asked, the data is most likely already there
                     //
@@ -345,7 +314,7 @@ namespace Microsoft.CodeAnalysis.Remote
                     AssetStorage.TryAddAsset(newChecksum, newText);
                 }
 
-                async Task<SourceText> TryGetSourceTextAsync()
+                async Task<SourceText?> TryGetSourceTextAsync()
                 {
                     // check the cheap and fast one first.
                     // see if the cache has the source text
@@ -372,7 +341,7 @@ namespace Microsoft.CodeAnalysis.Remote
                         return null;
                     }
 
-                    return await document.GetTextAsync(token).ConfigureAwait(false);
+                    return await document.GetTextAsync(cancellationToken).ConfigureAwait(false);
                 }
             }, cancellationToken);
         }
@@ -392,7 +361,7 @@ namespace Microsoft.CodeAnalysis.Remote
             }
 
             public override char this[int position] => _text[position];
-            public override Encoding Encoding => _text.Encoding;
+            public override Encoding? Encoding => _text.Encoding;
             public override int Length => _text.Length;
             public override SourceText GetSubText(TextSpan span) => _text.GetSubText(span);
             public override SourceText WithChanges(IEnumerable<TextChange> changes) => _text.WithChanges(changes);

@@ -1,6 +1,9 @@
-﻿' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿' Licensed to the .NET Foundation under one or more agreements.
+' The .NET Foundation licenses this file to you under the MIT license.
+' See the LICENSE file in the project root for more information.
 
 Imports Microsoft.CodeAnalysis
+Imports Microsoft.CodeAnalysis.Test.Extensions
 Imports Microsoft.CodeAnalysis.Test.Utilities
 Imports Microsoft.CodeAnalysis.VisualBasic
 Imports Microsoft.CodeAnalysis.VisualBasic.Syntax
@@ -1163,12 +1166,18 @@ Imports System
 </compilation>).
             VerifyDiagnostics(Diagnostic(ERRID.ERR_BadAttributeConstructor1, "myattr1").WithArguments("M1.c1()"),
                               Diagnostic(ERRID.ERR_BadAttributeConstructor1, "myattr2").WithArguments("M1.delegate1()"))
+
+            Dim scen18 = compilation.GlobalNamespace.GetTypeMember("M1").GetTypeMember("Scen18")
+            Dim attribute = scen18.GetAttributes().Single()
+            Assert.Equal("M1.myattr1(Nothing)", attribute.ToString())
+            Dim argument = attribute.CommonConstructorArguments(0)
+            Assert.Null(argument.Type)
         End Sub
 
         <Fact, WorkItem(3380, "DevDiv_Projects/Roslyn")>
         Public Sub BC30046ERR_ParamArrayWithOptArgs()
             CreateCompilationWithMscorlib40(<compilation name="ERR_ParamArrayWithOptArgs">
-                                              <file name="a.vb"><![CDATA[
+                                                <file name="a.vb"><![CDATA[
                 Class C1
                     Shared Sub Main()
                     End Sub
@@ -1176,7 +1185,7 @@ Imports System
                     End Sub
                 End Class
             ]]></file>
-                                          </compilation>).VerifyDiagnostics(
+                                            </compilation>).VerifyDiagnostics(
                                           Diagnostic(ERRID.ERR_ParamArrayWithOptArgs, "s"))
 
         End Sub
@@ -8258,25 +8267,25 @@ BC42353: Function '&lt;anonymous method>' doesn't return a value on all code pat
             compilation.VerifyDiagnostics(
                     Diagnostic(ERRID.ERR_NoNonNarrowingOverloadCandidates2, "Foo").WithArguments("Foo", <![CDATA[
     'Public Overloads Sub Foo(y1 As Module1.C1(Of Integer, Integer))': Argument matching parameter 'y1' narrows from 'Module1.Scenario11' to 'Module1.C1(Of Integer, Integer)'.
-    'Public Sub Foo(t1 As Module1.S1)': Argument matching parameter 't1' narrows from 'Module1.Scenario11' to 'Module1.S1'.]]>.Value.Replace(vbLf, vbCrLf)),
+    'Public Sub Foo(t1 As Module1.S1)': Argument matching parameter 't1' narrows from 'Module1.Scenario11' to 'Module1.S1'.]]>.Value.Replace(vbLf, Environment.NewLine)),
                     Diagnostic(ERRID.ERR_NoNonNarrowingOverloadCandidates2, "Foo").WithArguments("Foo", <![CDATA[
     'Public Overloads Sub Foo(y1 As Module1.C1(Of Integer, Integer))': Argument matching parameter 'y1' narrows from 'Module1.Scenario11' to 'Module1.C1(Of Integer, Integer)'.
-    'Public Sub Foo(t1 As Module1.S1)': Argument matching parameter 't1' narrows from 'Module1.Scenario11' to 'Module1.S1'.]]>.Value.Replace(vbLf, vbCrLf)),
+    'Public Sub Foo(t1 As Module1.S1)': Argument matching parameter 't1' narrows from 'Module1.Scenario11' to 'Module1.S1'.]]>.Value.Replace(vbLf, Environment.NewLine)),
                     Diagnostic(ERRID.ERR_NoNonNarrowingOverloadCandidates2, "Foo").WithArguments("Foo", <![CDATA[
     'Public Overloads Sub Foo(y1 As Long)': Argument matching parameter 'y1' narrows from 'Decimal' to 'Long'.
-    'Public Sub Foo(t1 As Short)': Argument matching parameter 't1' narrows from 'Decimal' to 'Short'.]]>.Value.Replace(vbLf, vbCrLf)),
+    'Public Sub Foo(t1 As Short)': Argument matching parameter 't1' narrows from 'Decimal' to 'Short'.]]>.Value.Replace(vbLf, Environment.NewLine)),
              Diagnostic(ERRID.ERR_NoNonNarrowingOverloadCandidates2, "tc2").WithArguments("Prop1", <![CDATA[
     'Public Overloads Default Property Prop1(y1 As Module1.C1(Of Integer, Integer)) As Integer': Argument matching parameter 'y1' narrows from 'Module1.Scenario11' to 'Module1.C1(Of Integer, Integer)'.
-    'Public Default Property Prop1(t1 As Module1.S1) As Integer': Argument matching parameter 't1' narrows from 'Module1.Scenario11' to 'Module1.S1'.]]>.Value.Replace(vbLf, vbCrLf)),
+    'Public Default Property Prop1(t1 As Module1.S1) As Integer': Argument matching parameter 't1' narrows from 'Module1.Scenario11' to 'Module1.S1'.]]>.Value.Replace(vbLf, Environment.NewLine)),
              Diagnostic(ERRID.ERR_NoNonNarrowingOverloadCandidates2, "tc2").WithArguments("Prop1", <![CDATA[
     'Public Overloads Default Property Prop1(y1 As Module1.C1(Of Integer, Integer)) As Integer': Argument matching parameter 'y1' narrows from 'Module1.Scenario11' to 'Module1.C1(Of Integer, Integer)'.
-    'Public Default Property Prop1(t1 As Module1.S1) As Integer': Argument matching parameter 't1' narrows from 'Module1.Scenario11' to 'Module1.S1'.]]>.Value.Replace(vbLf, vbCrLf)),
+    'Public Default Property Prop1(t1 As Module1.S1) As Integer': Argument matching parameter 't1' narrows from 'Module1.Scenario11' to 'Module1.S1'.]]>.Value.Replace(vbLf, Environment.NewLine)),
              Diagnostic(ERRID.ERR_NoNonNarrowingOverloadCandidates2, "tc3").WithArguments("Prop1", <![CDATA[
     'Public Overloads Default Property Prop1(y1 As Long) As Integer': Argument matching parameter 'y1' narrows from 'Decimal' to 'Long'.
-    'Public Default Property Prop1(t1 As Short) As Integer': Argument matching parameter 't1' narrows from 'Decimal' to 'Short'.]]>.Value.Replace(vbLf, vbCrLf)),
+    'Public Default Property Prop1(t1 As Short) As Integer': Argument matching parameter 't1' narrows from 'Decimal' to 'Short'.]]>.Value.Replace(vbLf, Environment.NewLine)),
             Diagnostic(ERRID.ERR_NoNonNarrowingOverloadCandidates2, "tc3").WithArguments("Prop1", <![CDATA[
     'Public Overloads Default Property Prop1(y1 As Long) As Integer': Argument matching parameter 'y1' narrows from 'Decimal' to 'Long'.
-    'Public Default Property Prop1(t1 As Short) As Integer': Argument matching parameter 't1' narrows from 'Decimal' to 'Short'.]]>.Value.Replace(vbLf, vbCrLf))
+    'Public Default Property Prop1(t1 As Short) As Integer': Argument matching parameter 't1' narrows from 'Decimal' to 'Short'.]]>.Value.Replace(vbLf, Environment.NewLine))
                 )
         End Sub
 
@@ -8325,14 +8334,14 @@ BC42353: Function '&lt;anonymous method>' doesn't return a value on all code pat
             compilation.VerifyDiagnostics(
              Diagnostic(ERRID.ERR_NoNonNarrowingOverloadCandidates2, "Foo").WithArguments("Foo", <![CDATA[
     'Public Sub Foo(p1 As Module1.sample7C1(Of Integer).E)': Argument matching parameter 'p1' narrows from 'Module1.sample7C1(Of Long).E' to 'Module1.sample7C1(Of Integer).E'.
-    'Public Sub Foo(p1 As Module1.sample7C1(Of Integer).E)': Argument matching parameter 'p1' narrows from 'Module1.sample7C1(Of Long).E' to 'Module1.sample7C1(Of Integer).E'.]]>.Value.Replace(vbLf, vbCrLf)),
+    'Public Sub Foo(p1 As Module1.sample7C1(Of Integer).E)': Argument matching parameter 'p1' narrows from 'Module1.sample7C1(Of Long).E' to 'Module1.sample7C1(Of Integer).E'.]]>.Value.Replace(vbLf, Environment.NewLine)),
              Diagnostic(ERRID.ERR_NoNonNarrowingOverloadCandidates2, "Foo").WithArguments("Foo", <![CDATA[
     'Public Sub Foo(p1 As Module1.sample7C1(Of Integer).E)': Argument matching parameter 'p1' narrows from 'Module1.sample7C1(Of Short).E' to 'Module1.sample7C1(Of Integer).E'.
-    'Public Sub Foo(p1 As Module1.sample7C1(Of Integer).E)': Argument matching parameter 'p1' narrows from 'Module1.sample7C1(Of Short).E' to 'Module1.sample7C1(Of Integer).E'.]]>.Value.Replace(vbLf, vbCrLf)),
+    'Public Sub Foo(p1 As Module1.sample7C1(Of Integer).E)': Argument matching parameter 'p1' narrows from 'Module1.sample7C1(Of Short).E' to 'Module1.sample7C1(Of Integer).E'.]]>.Value.Replace(vbLf, Environment.NewLine)),
              Diagnostic(ERRID.WRN_SharedMemberThroughInstance, "sc7.E"),
              Diagnostic(ERRID.ERR_NoNonNarrowingOverloadCandidates2, "Foo").WithArguments("Foo", <![CDATA[
     'Public Sub Foo(p1 As Module1.sample7C1(Of Integer).E)': Argument matching parameter 'p1' narrows from 'Module1.sample7C1(Of Byte).E' to 'Module1.sample7C1(Of Integer).E'.
-    'Public Sub Foo(p1 As Module1.sample7C1(Of Integer).E)': Argument matching parameter 'p1' narrows from 'Module1.sample7C1(Of Byte).E' to 'Module1.sample7C1(Of Integer).E'.]]>.Value.Replace(vbLf, vbCrLf))
+    'Public Sub Foo(p1 As Module1.sample7C1(Of Integer).E)': Argument matching parameter 'p1' narrows from 'Module1.sample7C1(Of Byte).E' to 'Module1.sample7C1(Of Integer).E'.]]>.Value.Replace(vbLf, Environment.NewLine))
                     )
 
             'CompilationUtils.AssertTheseErrors(compilation,
@@ -8385,7 +8394,7 @@ BC42353: Function '&lt;anonymous method>' doesn't return a value on all code pat
 
             compilation.VerifyDiagnostics(Diagnostic(ERRID.ERR_NoMostSpecificOverload2, "Foo").WithArguments("Foo", <![CDATA[
     'Public Overloads Sub Module1.C1(Of Module1.S1, Module1.C1(Of Integer, Integer)).Foo(y1 As Module1.C1(Of Integer, Integer))': Not most specific.
-    'Public Sub Module1.C0(Of Module1.S1).Foo(t1 As Module1.S1)': Not most specific.]]>.Value.Replace(vbLf, vbCrLf))
+    'Public Sub Module1.C0(Of Module1.S1).Foo(t1 As Module1.S1)': Not most specific.]]>.Value.Replace(vbLf, Environment.NewLine))
                     )
 
         End Sub
@@ -10083,7 +10092,7 @@ BC30657: 'IOCompletionCallback' has a return type that is not supported or param
                     End Set
                 End Property
             End Class
-            &lt;MyAttr(Prop:=1)&gt;
+            &lt;MyAttr(Prop:=1)&gt;'BIND:"Prop"
             Class C1
             End Class
         End Module
@@ -10092,9 +10101,14 @@ BC30657: 'IOCompletionCallback' has a return type that is not supported or param
             CompilationUtils.AssertTheseDiagnostics(compilation,
     <expected>
 BC30658: Property 'Prop' with no parameters cannot be found.
-            &lt;MyAttr(Prop:=1)&gt;
+            &lt;MyAttr(Prop:=1)&gt;'BIND:"Prop"
                     ~~~~
 </expected>)
+
+            VerifyOperationTreeForTest(Of IdentifierNameSyntax)(compilation, "a.vb", <![CDATA[
+IPropertyReferenceOperation: Property M1.MyAttr.Prop(i As System.Int32) As System.Int32 (OperationKind.PropertyReference, Type: System.Int32, IsInvalid) (Syntax: 'Prop')
+  Instance Receiver: 
+    null]]>.Value)
         End Sub
 
         <Fact()>
@@ -16059,10 +16073,10 @@ BC33035: Type 'c2' must define operator 'IsTrue' to be used in a 'OrElse' expres
     </compilation>)
 
             Dim expectedErrors1 = <errors>
-BC33107: First operand in a binary 'If' expression must be nullable or a reference type.
+BC33107: First operand in a binary 'If' expression must be a nullable value type, a reference type, or an unconstrained generic type.
                 Console.WriteLine(If(choice1 &lt; choice2, 1))
                                      ~~~~~~~~~~~~~~~~~
-BC33107: First operand in a binary 'If' expression must be nullable or a reference type.
+BC33107: First operand in a binary 'If' expression must be a nullable value type, a reference type, or an unconstrained generic type.
                 Console.WriteLine(If(booleanVar, "Test returns True."))
                                      ~~~~~~~~~~
                  </errors>
@@ -17701,7 +17715,7 @@ BC42104: Variable 'y' is used before it has been assigned a value. A null refere
     )
         End Sub
 
-        <Fact()>
+        <ConditionalFact(GetType(WindowsOnly), Reason:="https://github.com/dotnet/roslyn/issues/29568")>
         Public Sub BC36670ERR_LambdaBindingMismatch2()
             CreateCompilationWithMscorlib40AndVBRuntimeAndReferences(
     <compilation name="LambdaBindingMismatch2">
@@ -17724,12 +17738,12 @@ BC42104: Variable 'y' is used before it has been assigned a value. A null refere
     </compilation>, {SystemCoreRef}).VerifyDiagnostics(Diagnostic(ERRID.ERR_LambdaBindingMismatch2,
             <![CDATA[Sub(x As Integer(,))
                            Action()
-                       End Sub]]>.Value.Replace(vbLf, vbCrLf)).WithArguments("System.Action")
+                       End Sub]]>.Value.Replace(vbLf, Environment.NewLine)).WithArguments("System.Action")
             )
         End Sub
 
         ' Different error
-        <Fact()>
+        <ConditionalFact(GetType(WindowsOnly), Reason:="https://github.com/dotnet/roslyn/issues/29531")>
         Public Sub BC36675ERR_StatementLambdaInExpressionTree()
 
             CreateCompilationWithMscorlib40AndVBRuntimeAndReferences(
@@ -17748,7 +17762,7 @@ BC42104: Variable 'y' is used before it has been assigned a value. A null refere
     </compilation>, {SystemCoreRef}).VerifyDiagnostics(
             Diagnostic(ERRID.ERR_StatementLambdaInExpressionTree, <![CDATA[Function()
                                                                                                Return x
-                                                                                               End Function]]>.Value.Replace(vbLf, vbCrLf)))
+                                                                                               End Function]]>.Value.Replace(vbLf, Environment.NewLine)))
 
         End Sub
 

@@ -1,4 +1,6 @@
-﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
 
 using System;
 using System.Collections.Generic;
@@ -7,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Shared.Extensions;
+using Microsoft.CodeAnalysis.Shared.Utilities;
 using Microsoft.CodeAnalysis.Test.Utilities;
 using Microsoft.CodeAnalysis.Text;
 using Roslyn.Test.Utilities;
@@ -17,6 +20,62 @@ namespace Microsoft.CodeAnalysis.UnitTests
     [UseExportProvider]
     public class SymbolKeyTests : TestBase
     {
+        [Fact]
+        public void TestVersionMismatch()
+        {
+            var source = @"
+
+public class C
+{
+    public class B { };
+    public delegate int D(int v);
+
+    public int F;
+    public B F2;
+    public int P { get; set;}
+    public B P2 { get; set; }
+    public void M() { };
+    public void M(int a) { };
+    public void M(int a, string b) { };
+    public void M(string a, int b) { };
+    public void M(B b) { };
+    public int M2() { return 0; }
+    public int M2(int a) { return 0; }
+    public int M2(int a, string b) { return 0; }
+    public int M2(string a, int b) { return 0; }
+    public B M3() { return default(B); }
+    public int this[int index] { get { return 0; } }
+    public int this[int a, int b] { get { return 0; } }
+    public B this[B b] { get { return b; } }
+    public event D E;
+    public event D E2 { add; remove; }
+    public delegate*<C, B> Ptr;
+}
+";
+            var compilation = GetCompilation(source, LanguageNames.CSharp);
+            foreach (var symbol in GetDeclaredSymbols(compilation))
+            {
+                Test(symbol, compilation);
+            }
+
+            return;
+
+            static void Test(ISymbol symbol, Compilation compilation)
+            {
+                TestVersion(symbol, compilation, SymbolKey.FormatVersion - 1);
+                TestVersion(symbol, compilation, SymbolKey.FormatVersion + 1);
+                TestVersion(symbol, compilation, int.MaxValue);
+            }
+
+            static void TestVersion(ISymbol symbol, Compilation compilation, int version)
+            {
+                var id = SymbolKey.CreateStringWorker(version, symbol);
+                Assert.NotNull(id);
+                var found = SymbolKey.ResolveString(id, compilation).GetAnySymbol();
+                Assert.Null(found);
+            }
+        }
+
         [Fact]
         public void TestMemberDeclarations()
         {
@@ -77,7 +136,9 @@ namespace A { namespace N { } }
 ";
             var compilation = GetCompilation(source, LanguageNames.CSharp);
             var symbols = GetDeclaredSymbols(compilation);
-            Assert.Equal(5, symbols.Count);
+            Assert.Equal(5, symbols.Count());
+            Assert.Equal(new[] { "N", "A", "A.B", "A.B.C", "A.N" },
+                symbols.Select(s => s.ToDisplayString()));
             TestRoundTrip(symbols, compilation);
         }
 
@@ -164,7 +225,7 @@ public class C
     public A GetA<A>(A a) { return a; }
     public A GetA<A, B>(A a, B b) { return a; }
     public B GetB<A, B>(A a, B b) { return b; }
-    publi C GetC() { return default(C); }
+    public C GetC() { return default(C); }
 }
 
 public class C<T>
@@ -520,7 +581,7 @@ public class A<T1>
             var tree = compilation.SyntaxTrees.First();
             var model = compilation.GetSemanticModel(tree);
 
-            var typeParameter = GetDeclaredSymbols(compilation).OfType<INamedTypeSymbol>().Single().TypeParameters.Single();
+            var typeParameter = GetDeclaredSymbols(compilation).OfType<INamedTypeSymbol>().Where(n => !n.IsImplicitlyDeclared).Single().TypeParameters.Single();
 
             TestRoundTrip(typeParameter, compilation);
         }
@@ -533,7 +594,8 @@ public class A<T1>
             var compilation = GetCompilation(source, LanguageNames.CSharp);
             var tree = compilation.SyntaxTrees.First();
             var model = compilation.GetSemanticModel(tree);
-            var typeParameter = GetDeclaredSymbols(compilation).OfType<INamedTypeSymbol>().Single().GetMembers("M").OfType<IMethodSymbol>().Single().TypeParameters.Single();
+            var typeParameter = GetDeclaredSymbols(compilation).OfType<INamedTypeSymbol>()
+                .Where(n => !n.IsImplicitlyDeclared).Single().GetMembers("M").OfType<IMethodSymbol>().Single().TypeParameters.Single();
 
             TestRoundTrip(typeParameter, compilation);
         }
@@ -578,7 +640,7 @@ class C
             var xSymbol = testModel.LookupSymbols(position).First(s => s.Name == "x");
 
             // This should not throw an exception.
-            Assert.NotNull(SymbolKey.Create(xSymbol));
+            Assert.NotEqual(default, SymbolKey.Create(xSymbol));
         }
 
         [Fact]
@@ -633,13 +695,13 @@ class C
             foreach (var symbol in symbols)
             {
                 // Ensure we don't crash getting these symbol keys.
-                var id = SymbolKey.ToString(symbol);
+                var id = SymbolKey.CreateString(symbol);
                 Assert.NotNull(id);
-                var found = SymbolKey.Resolve(id, compilation: compilation).GetAnySymbol();
+                var found = SymbolKey.ResolveString(id, compilation).GetAnySymbol();
                 Assert.NotNull(found);
 
                 // note: we don't check that the symbols are equal.  That's because the compiler
-                // doesn't guarantee that the TypeParameters will be hte same across successive
+                // doesn't guarantee that the TypeParameters will be the same across successive
                 // invocations. 
                 Assert.Equal(symbol.OriginalDefinition, found.OriginalDefinition);
 
@@ -671,12 +733,12 @@ class C
                 n => n is CSharp.Syntax.MethodDeclarationSyntax).Single();
 
             // Ensure we don't crash getting these symbol keys.
-            var id = SymbolKey.ToString(symbol);
+            var id = SymbolKey.CreateString(symbol);
             Assert.NotNull(id);
 
             // Validate that if the client does ask to resolve locations that we
             // do not crash if those locations cannot be found.
-            var found = SymbolKey.Resolve(id, compilation2, resolveLocations: true).GetAnySymbol();
+            var found = SymbolKey.ResolveString(id, compilation2).GetAnySymbol();
             Assert.NotNull(found);
 
             Assert.Equal(symbol.Name, found.Name);
@@ -708,12 +770,12 @@ class C
                 n => n is CSharp.Syntax.MethodDeclarationSyntax).Single();
 
             // Ensure we don't crash getting these symbol keys.
-            var id = SymbolKey.ToString(symbol);
+            var id = SymbolKey.CreateString(symbol);
             Assert.NotNull(id);
 
             // Validate that if the client does ask to resolve locations that we
             // do not crash if those locations cannot be found.
-            var found = SymbolKey.Resolve(id, compilation2, resolveLocations: true).GetAnySymbol();
+            var found = SymbolKey.ResolveString(id, compilation2).GetAnySymbol();
             Assert.NotNull(found);
 
             Assert.Equal(symbol.Name, found.Name);
@@ -723,7 +785,190 @@ class C
             Assert.True(method.Parameters[0].Type.IsTupleType);
         }
 
-        private void TestRoundTrip(IEnumerable<ISymbol> symbols, Compilation compilation, Func<ISymbol, object> fnId = null)
+        [Fact, WorkItem(14365, "https://github.com/dotnet/roslyn/issues/14365")]
+        public void TestErrorType_CSharp()
+        {
+            var source = @"
+class C
+{
+    int i { get; }
+}";
+
+            // We don't add metadata references, so even `int` will be an error type.
+            var compilation1 = GetCompilation(source, LanguageNames.CSharp, "File1.cs", Array.Empty<MetadataReference>());
+            var compilation2 = GetCompilation(source, LanguageNames.CSharp, "File2.cs", Array.Empty<MetadataReference>());
+
+            var symbol = (IPropertySymbol)GetAllSymbols(
+                compilation1.GetSemanticModel(compilation1.SyntaxTrees.Single()),
+                n => n is CSharp.Syntax.PropertyDeclarationSyntax).Single();
+
+            var propType = symbol.Type;
+            Assert.Equal(SymbolKind.ErrorType, propType.Kind);
+
+            // Ensure we don't crash getting these symbol keys.
+            var id = SymbolKey.CreateString(propType);
+            Assert.NotNull(id);
+
+            // Validate that if the client does ask to resolve locations that we
+            // do not crash if those locations cannot be found.
+            var found = SymbolKey.ResolveString(id, compilation2).GetAnySymbol();
+            Assert.NotNull(found);
+
+            Assert.Equal(propType.Name, found.Name);
+            Assert.Equal(propType.Kind, found.Kind);
+
+            var method = (IErrorTypeSymbol)found;
+            Assert.True(SymbolEquivalenceComparer.Instance.Equals(propType, found));
+        }
+
+        [Fact, WorkItem(14365, "https://github.com/dotnet/roslyn/issues/14365")]
+        public void TestErrorType_VB()
+        {
+            var source = @"
+class C
+    public readonly property i as integer
+end class";
+
+            // We don't add metadata references, so even `int` will be an error type.
+            var compilation1 = GetCompilation(source, LanguageNames.VisualBasic, "File1.vb", Array.Empty<MetadataReference>());
+            var compilation2 = GetCompilation(source, LanguageNames.VisualBasic, "File2.vb", Array.Empty<MetadataReference>());
+
+            var symbol = (IPropertySymbol)GetAllSymbols(
+                compilation1.GetSemanticModel(compilation1.SyntaxTrees.Single()),
+                n => n is VisualBasic.Syntax.PropertyStatementSyntax).Single();
+
+            var propType = symbol.Type;
+            Assert.Equal(SymbolKind.ErrorType, propType.Kind);
+
+            // Ensure we don't crash getting these symbol keys.
+            var id = SymbolKey.CreateString(propType);
+            Assert.NotNull(id);
+
+            // Validate that if the client does ask to resolve locations that we
+            // do not crash if those locations cannot be found.
+            var found = SymbolKey.ResolveString(id, compilation2).GetAnySymbol();
+            Assert.NotNull(found);
+
+            Assert.Equal(propType.Name, found.Name);
+            Assert.Equal(propType.Kind, found.Kind);
+
+            var method = (IErrorTypeSymbol)found;
+            Assert.True(SymbolEquivalenceComparer.Instance.Equals(propType, found));
+        }
+
+        [Fact, WorkItem(14365, "https://github.com/dotnet/roslyn/issues/14365")]
+        public void TestErrorTypeInNestedNamespace()
+        {
+            var source1 = @"
+public class C
+{
+    public System.Collections.IEnumerable I { get; }
+}";
+
+            var source2 = @"
+class X
+{
+    void M()
+    {
+        new C().I;
+    }
+}";
+
+            // We don't add metadata to the second compilation, so even `System.Collections.IEnumerable` will be an
+            // error type.
+            var compilation1 = GetCompilation(source1, LanguageNames.CSharp, "File1.cs");
+            var compilation2 = GetCompilation(source2, LanguageNames.CSharp, "File2.cs",
+                new[] { compilation1.ToMetadataReference() });
+
+            var symbol = (IPropertySymbol)GetAllSymbols(
+                compilation2.GetSemanticModel(compilation2.SyntaxTrees.Single()),
+                n => n is CSharp.Syntax.MemberAccessExpressionSyntax).Single();
+
+            var propType = symbol.Type;
+            Assert.Equal(SymbolKind.ErrorType, propType.Kind);
+            Assert.Equal("Collections", propType.ContainingNamespace.Name);
+            Assert.Equal("System", propType.ContainingNamespace.ContainingNamespace.Name);
+
+            // Ensure we don't crash getting these symbol keys.
+            var id = SymbolKey.CreateString(propType);
+            Assert.NotNull(id);
+
+            // Validate that if the client does ask to resolve locations that we
+            // do not crash if those locations cannot be found.
+            var found = SymbolKey.ResolveString(id, compilation2).GetAnySymbol();
+            Assert.NotNull(found);
+
+            Assert.Equal(propType.Name, found.Name);
+            Assert.Equal(propType.Kind, found.Kind);
+            Assert.Equal(propType.ContainingNamespace.Name, found.ContainingNamespace.Name);
+
+            var method = (IErrorTypeSymbol)found;
+            Assert.True(SymbolEquivalenceComparer.Instance.Equals(propType, found));
+        }
+
+        [Fact, WorkItem(14365, "https://github.com/dotnet/roslyn/issues/14365")]
+        public void TestErrorTypeInNestedNamespace_VB()
+        {
+            var source1 = @"
+public class C
+    public readonly property I as System.Collections.IEnumerable
+end class";
+
+            var source2 = @"
+class X
+    sub M()
+        dim y = new C().I;
+    end sub
+end class";
+
+            // We don't add metadata to the second compilation, so even `System.Collections.IEnumerable` will be an
+            // error type.
+            var compilation1 = GetCompilation(source1, LanguageNames.VisualBasic, "File1.vb");
+            var compilation2 = GetCompilation(source2, LanguageNames.VisualBasic, "File2.vb",
+                new[] { compilation1.ToMetadataReference() });
+
+            var symbol = (IPropertySymbol)GetAllSymbols(
+                compilation2.GetSemanticModel(compilation2.SyntaxTrees.Single()),
+                n => n is VisualBasic.Syntax.MemberAccessExpressionSyntax).Single();
+
+            var propType = symbol.Type;
+            Assert.Equal(SymbolKind.ErrorType, propType.Kind);
+            Assert.Equal("Collections", propType.ContainingNamespace.Name);
+            Assert.Equal("System", propType.ContainingNamespace.ContainingNamespace.Name);
+
+            // Ensure we don't crash getting these symbol keys.
+            var id = SymbolKey.CreateString(propType);
+            Assert.NotNull(id);
+
+            // Validate that if the client does ask to resolve locations that we
+            // do not crash if those locations cannot be found.
+            var found = SymbolKey.ResolveString(id, compilation2).GetAnySymbol();
+            Assert.NotNull(found);
+
+            Assert.Equal(propType.Name, found.Name);
+            Assert.Equal(propType.Kind, found.Kind);
+            Assert.Equal(propType.ContainingNamespace.Name, found.ContainingNamespace.Name);
+
+            var method = (IErrorTypeSymbol)found;
+            Assert.True(SymbolEquivalenceComparer.Instance.Equals(propType, found));
+        }
+
+        [Fact]
+        public void TestFunctionPointerTypeSymbols()
+        {
+            var source = @"
+class C
+{
+    public delegate*<ref string, out int, in C, ref C> ptr1;
+    public delegate*<ref readonly C> ptr1;
+}";
+
+            var comp = GetCompilation(source, LanguageNames.CSharp);
+            var fields = GetDeclaredSymbols(comp).OfType<IFieldSymbol>().Select(f => f.Type);
+            TestRoundTrip(fields, comp);
+        }
+
+        private static void TestRoundTrip(IEnumerable<ISymbol> symbols, Compilation compilation, Func<ISymbol, object> fnId = null)
         {
             foreach (var symbol in symbols)
             {
@@ -731,11 +976,11 @@ class C
             }
         }
 
-        private void TestRoundTrip(ISymbol symbol, Compilation compilation, Func<ISymbol, object> fnId = null)
+        private static void TestRoundTrip(ISymbol symbol, Compilation compilation, Func<ISymbol, object> fnId = null)
         {
-            var id = SymbolKey.ToString(symbol);
+            var id = SymbolKey.CreateString(symbol);
             Assert.NotNull(id);
-            var found = SymbolKey.Resolve(id, compilation).GetAnySymbol();
+            var found = SymbolKey.ResolveString(id, compilation).GetAnySymbol();
             Assert.NotNull(found);
 
             if (fnId != null)
@@ -750,9 +995,9 @@ class C
             }
         }
 
-        private Compilation GetCompilation(string source, string language, string path = "")
+        private static Compilation GetCompilation(string source, string language, string path = "", MetadataReference[] references = null)
         {
-            var references = new[]
+            references ??= new[]
             {
                 MetadataReference.CreateFromFile(typeof(object).Assembly.Location),
                 MetadataReference.CreateFromFile(typeof(Enumerable).Assembly.Location)

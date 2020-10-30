@@ -1,8 +1,12 @@
-﻿' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿' Licensed to the .NET Foundation under one or more agreements.
+' The .NET Foundation licenses this file to you under the MIT license.
+' See the LICENSE file in the project root for more information.
 
 Imports System.Collections.Immutable
 Imports System.Composition
+Imports System.Diagnostics.CodeAnalysis
 Imports Microsoft.CodeAnalysis.CodeFixes
+Imports Microsoft.CodeAnalysis.MakeMethodAsynchronous.AbstractMakeMethodAsynchronousCodeFixProvider
 Imports Microsoft.CodeAnalysis.MakeMethodSynchronous
 Imports Microsoft.CodeAnalysis.VisualBasic.Syntax
 
@@ -16,6 +20,11 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.MakeMethodSynchronous
 
         Private Shared ReadOnly s_diagnosticIds As ImmutableArray(Of String) = ImmutableArray.Create(BC42356)
 
+        <ImportingConstructor>
+        <SuppressMessage("RoslynDiagnosticsReliability", "RS0033:Importing constructor should be [Obsolete]", Justification:="Used in test code: https://github.com/dotnet/roslyn/issues/42814")>
+        Public Sub New()
+        End Sub
+
         Public Overrides ReadOnly Property FixableDiagnosticIds As ImmutableArray(Of String)
             Get
                 Return s_diagnosticIds
@@ -26,7 +35,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.MakeMethodSynchronous
             Return node.IsAsyncSupportedFunctionSyntax()
         End Function
 
-        Protected Overrides Function RemoveAsyncTokenAndFixReturnType(methodSymbolOpt As IMethodSymbol, node As SyntaxNode, taskType As ITypeSymbol, taskOfTType As ITypeSymbol) As SyntaxNode
+        Protected Overrides Function RemoveAsyncTokenAndFixReturnType(methodSymbolOpt As IMethodSymbol, node As SyntaxNode, knownTypes As KnownTypes) As SyntaxNode
             If node.IsKind(SyntaxKind.SingleLineSubLambdaExpression) OrElse
                 node.IsKind(SyntaxKind.SingleLineFunctionLambdaExpression) Then
 
@@ -38,21 +47,21 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.MakeMethodSynchronous
             ElseIf node.IsKind(SyntaxKind.SubBlock) Then
                 Return FixSubBlock(DirectCast(node, MethodBlockSyntax))
             Else
-                Return FixFunctionBlock(methodSymbolOpt, DirectCast(node, MethodBlockSyntax), taskType, taskOfTType)
+                Return FixFunctionBlock(methodSymbolOpt, DirectCast(node, MethodBlockSyntax), knownTypes)
             End If
         End Function
 
-        Private Function FixFunctionBlock(methodSymbol As IMethodSymbol, node As MethodBlockSyntax, taskType As ITypeSymbol, taskOfTType As ITypeSymbol) As SyntaxNode
+        Private Shared Function FixFunctionBlock(methodSymbol As IMethodSymbol, node As MethodBlockSyntax, knownTypes As KnownTypes) As SyntaxNode
             Dim functionStatement = node.SubOrFunctionStatement
 
             ' if this returns Task(of T), then we want to convert this to a T returning function.
             ' if this returns Task, then we want to convert it to a Sub method.
-            If methodSymbol.ReturnType.OriginalDefinition.Equals(taskOfTType) Then
+            If methodSymbol.ReturnType.OriginalDefinition.Equals(knownTypes._taskOfTType) Then
                 Dim newAsClause = functionStatement.AsClause.WithType(methodSymbol.ReturnType.GetTypeArguments()(0).GenerateTypeSyntax())
                 Dim newFunctionStatement = functionStatement.WithAsClause(newAsClause)
                 newFunctionStatement = RemoveAsyncKeyword(newFunctionStatement)
                 Return node.WithSubOrFunctionStatement(newFunctionStatement)
-            ElseIf methodSymbol.ReturnType.OriginalDefinition Is taskType Then
+            ElseIf Equals(methodSymbol.ReturnType.OriginalDefinition, knownTypes._taskType) Then
                 ' Convert this to a 'Sub' method.
                 Dim subStatement = SyntaxFactory.SubStatement(
                     functionStatement.AttributeLists,
@@ -79,7 +88,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.MakeMethodSynchronous
             End If
         End Function
 
-        Private Function FixSubBlock(node As MethodBlockSyntax) As SyntaxNode
+        Private Shared Function FixSubBlock(node As MethodBlockSyntax) As SyntaxNode
             Dim newSubStatement = RemoveAsyncKeyword(node.SubOrFunctionStatement)
             Return node.WithSubOrFunctionStatement(newSubStatement)
         End Function
@@ -113,12 +122,12 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.MakeMethodSynchronous
             Return newSubOrFunctionStatement
         End Function
 
-        Private Function FixMultiLineLambdaExpression(node As MultiLineLambdaExpressionSyntax) As SyntaxNode
+        Private Shared Function FixMultiLineLambdaExpression(node As MultiLineLambdaExpressionSyntax) As SyntaxNode
             Dim header As LambdaHeaderSyntax = GetNewHeader(node)
             Return node.WithSubOrFunctionHeader(header).WithLeadingTrivia(node.GetLeadingTrivia())
         End Function
 
-        Private Function FixSingleLineLambdaExpression(node As SingleLineLambdaExpressionSyntax) As SingleLineLambdaExpressionSyntax
+        Private Shared Function FixSingleLineLambdaExpression(node As SingleLineLambdaExpressionSyntax) As SingleLineLambdaExpressionSyntax
             Dim header As LambdaHeaderSyntax = GetNewHeader(node)
             Return node.WithSubOrFunctionHeader(header).WithLeadingTrivia(node.GetLeadingTrivia())
         End Function

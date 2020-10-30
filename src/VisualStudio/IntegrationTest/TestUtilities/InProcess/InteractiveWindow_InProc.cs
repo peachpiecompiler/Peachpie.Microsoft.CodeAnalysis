@@ -1,11 +1,15 @@
-﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
 
-using Microsoft.VisualStudio.InteractiveWindow;
-using Microsoft.VisualStudio.Text;
-using Microsoft.VisualStudio.Text.Editor;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.VisualStudio.InteractiveWindow;
+using Microsoft.VisualStudio.Shell.Interop;
+using Microsoft.VisualStudio.Text;
+using Microsoft.VisualStudio.Text.Editor;
+using Microsoft.VisualStudio.Threading;
 
 namespace Microsoft.VisualStudio.IntegrationTest.Utilities.InProcess
 {
@@ -23,14 +27,14 @@ namespace Microsoft.VisualStudio.IntegrationTest.Utilities.InProcess
         private const int DefaultTimeoutInMilliseconds = 10000;
 
         private readonly string _viewCommand;
-        private readonly string _windowTitle;
+        private readonly Guid _windowId;
         private int _timeoutInMilliseconds;
         private IInteractiveWindow _interactiveWindow;
 
-        protected InteractiveWindow_InProc(string viewCommand, string windowTitle)
+        protected InteractiveWindow_InProc(string viewCommand, Guid windowId)
         {
             _viewCommand = viewCommand;
-            _windowTitle = windowTitle;
+            _windowId = windowId;
             _timeoutInMilliseconds = DefaultTimeoutInMilliseconds;
         }
 
@@ -60,6 +64,9 @@ namespace Microsoft.VisualStudio.IntegrationTest.Utilities.InProcess
 
         public string GetReplText()
             => _interactiveWindow.TextView.TextBuffer.CurrentSnapshot.GetText();
+
+        protected override bool HasActiveTextView()
+            => _interactiveWindow.TextView is object;
 
         protected override IWpfTextView GetActiveTextView()
             => _interactiveWindow.TextView;
@@ -94,8 +101,9 @@ namespace Microsoft.VisualStudio.IntegrationTest.Utilities.InProcess
 
             var replText = GetReplTextWithoutPrompt();
             var lastPromptIndex = replText.LastIndexOf(ReplPromptText);
+            if (lastPromptIndex > 0)
+                replText = replText.Substring(lastPromptIndex, replText.Length - lastPromptIndex);
 
-            replText = replText.Substring(lastPromptIndex, replText.Length - lastPromptIndex);
             var lastSubmissionIndex = replText.LastIndexOf(NewLineFollowedByReplSubmissionText);
 
             if (lastSubmissionIndex > 0)
@@ -158,21 +166,20 @@ namespace Microsoft.VisualStudio.IntegrationTest.Utilities.InProcess
 
         public void SubmitText(string text)
         {
-            _interactiveWindow.SubmitAsync(new[] { text }).Wait();
+            using var cts = new CancellationTokenSource(Helper.HangMitigatingTimeout);
+            _interactiveWindow.SubmitAsync(new[] { text }).WithCancellation(cts.Token).Wait();
         }
 
         public void CloseWindow()
         {
-            var dte = GetDTE();
-
-            foreach (EnvDTE.Window window in dte.Windows)
+            InvokeOnUIThread(cancellationToken =>
             {
-                if (window.Caption == _windowTitle)
+                var shell = GetGlobalService<SVsUIShell, IVsUIShell>();
+                if (ErrorHandler.Succeeded(shell.FindToolWindow((uint)__VSFINDTOOLWIN.FTW_fFrameOnly, _windowId, out var windowFrame)))
                 {
-                    window?.Close();
-                    break;
+                    ErrorHandler.ThrowOnFailure(windowFrame.CloseFrame((uint)__FRAMECLOSE.FRAMECLOSE_NoSave));
                 }
-            }
+            });
         }
 
         public void ShowWindow(bool waitForPrompt = true)

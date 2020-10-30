@@ -1,4 +1,6 @@
-﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
 
 using Microsoft.CodeAnalysis.CSharp.Symbols;
 using Microsoft.CodeAnalysis.CSharp.Test.Utilities;
@@ -41,15 +43,16 @@ class C
         [Fact]
         public void Syntax03()
         {
-            var comp = CreateCompilationWithMscorlib45(@"
+            var comp = CreateCompilation(@"
 interface C
 {
     int P => 1;
-}");
+}", parseOptions: TestOptions.Regular7, targetFramework: TargetFramework.NetStandardLatest);
             comp.VerifyDiagnostics(
-    // (4,14): error CS0531: 'C.P.get': interface members cannot have a definition
-    //     int P => 1;
-    Diagnostic(ErrorCode.ERR_InterfaceMemberHasBody, "1").WithArguments("C.P.get").WithLocation(4, 14));
+                // (4,14): error CS8652: The feature 'default interface implementation' is not available in C# 7.0. Please use language version 8.0 or greater.
+                //     int P => 1;
+                Diagnostic(ErrorCode.ERR_FeatureNotAvailableInVersion7, "1").WithArguments("default interface implementation", "8.0").WithLocation(4, 14)
+                );
         }
 
         [Fact]
@@ -171,7 +174,7 @@ interface I
     // (4,20): error CS1514: { expected
     //     int this[int i];
     Diagnostic(ErrorCode.ERR_LbraceExpected, ";").WithLocation(4, 20),
-    // (4,20): error CS1014: A get or set accessor expected
+    // (4,20): error CS1014: A get, set or init accessor expected
     //     int this[int i];
     Diagnostic(ErrorCode.ERR_GetOrSetExpected, ";").WithLocation(4, 20),
     // (5,2): error CS1513: } expected
