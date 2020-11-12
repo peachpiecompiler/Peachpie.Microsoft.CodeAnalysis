@@ -23,6 +23,7 @@
     <PackageTags>php;peachpie;dotnet;compiler;roslyn</PackageTags>
     <RepositoryUrl>https://github.com/iolevel/Peachpie.Microsoft.CodeAnalysis</RepositoryUrl>
     <PackageProjectUrl>https://github.com/iolevel/Peachpie.Microsoft.CodeAnalysis</PackageProjectUrl>
+    <StrongNameKeyId>Open</StrongNameKeyId>
   </PropertyGroup>
   <ItemGroup>
     <None Include="Operations\OperationInterfaces.xml" />
