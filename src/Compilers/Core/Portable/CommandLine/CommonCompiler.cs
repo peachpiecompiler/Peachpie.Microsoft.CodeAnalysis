@@ -79,7 +79,7 @@ namespace Microsoft.CodeAnalysis
         /// The set of source file paths that are in the set of embedded paths.
         /// This is used to prevent reading source files that are embedded twice.
         /// </summary>
-        public IReadOnlySet<string> EmbeddedSourcePaths { get; }
+        public Roslyn.Utilities.IReadOnlySet<string> EmbeddedSourcePaths { get; }
 
         private readonly HashSet<Diagnostic> _reportedDiagnostics = new HashSet<Diagnostic>();
 
@@ -475,7 +475,7 @@ namespace Microsoft.CodeAnalysis
             OrderedSet<string> embeddedFiles,
             DiagnosticBag diagnostics);
 
-        private static IReadOnlySet<string> GetEmbeddedSourcePaths(CommandLineArguments arguments)
+        private static Roslyn.Utilities.IReadOnlySet<string> GetEmbeddedSourcePaths(CommandLineArguments arguments)
         {
             if (arguments.EmbeddedFiles.IsEmpty)
             {

@@ -5,6 +5,7 @@
 #nullable enable
 
 using System.Collections.Immutable;
+using System.Collections.Generic;
 using Roslyn.Utilities;
 
 namespace Microsoft.CodeAnalysis.Diagnostics
@@ -32,7 +33,7 @@ namespace Microsoft.CodeAnalysis.Diagnostics
 
         public sealed override int GetHashCode()
         {
-            return ReferenceEqualityComparer.GetHashCode(this);
+            return ReferenceEqualityComparer.Instance.GetHashCode(this);
         }
 
         public sealed override string ToString()

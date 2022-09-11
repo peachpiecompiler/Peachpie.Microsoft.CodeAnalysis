@@ -12,7 +12,7 @@ using Roslyn.Utilities;
 
 namespace Microsoft.CodeAnalysis.Collections
 {
-    internal sealed class OrderedSet<T> : IEnumerable<T>, IReadOnlySet<T>, IReadOnlyList<T>, IOrderedReadOnlySet<T>
+    internal sealed class OrderedSet<T> : IEnumerable<T>, Roslyn.Utilities.IReadOnlySet<T>, IReadOnlyList<T>, IOrderedReadOnlySet<T>
     {
         private readonly HashSet<T> _set;
         private readonly ArrayBuilder<T> _list;
