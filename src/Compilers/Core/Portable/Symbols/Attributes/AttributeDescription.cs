@@ -202,8 +202,8 @@ namespace Microsoft.CodeAnalysis
         // TODO: We should reuse the byte arrays for well-known attributes with same signatures.
 
         private static readonly byte[][] s_signaturesOfTypeIdentifierAttribute = { s_signature_HasThis_Void, s_signature_HasThis_Void_String_String };
-        private static readonly byte[][] s_signaturesOfStandardModuleAttribute = { s_signature_HasThis_Void };
-        private static readonly byte[][] s_signaturesOfExtensionAttribute = { s_signature_HasThis_Void };
+        private static byte[][] s_signaturesOfStandardModuleAttribute => s_signatures_HasThis_Void_Only;
+        private static byte[][] s_signaturesOfExtensionAttribute => s_signatures_HasThis_Void_Only;
         private static readonly byte[][] s_signaturesOfAttributeUsage = { s_signature_HasThis_Void_AttributeTargets };
         private static readonly byte[][] s_signaturesOfAssemblySignatureKeyAttribute = { s_signature_HasThis_Void_String_String };
         private static readonly byte[][] s_signaturesOfAssemblyKeyFileAttribute = { s_signature_HasThis_Void_String };
@@ -226,25 +226,25 @@ namespace Microsoft.CodeAnalysis
             s_signature_HasThis_Void_Int32,
             s_signature_HasThis_Void_UInt32
         };
+        private static byte[][] s_signatures_HasThis_Void_Only => s_signatures_HasThis_Void_Only;
         private static readonly byte[][] s_signaturesOfDefaultMemberAttribute = { s_signature_HasThis_Void_String };
         private static readonly byte[][] s_signaturesOfAccessedThroughPropertyAttribute = { s_signature_HasThis_Void_String };
         private static readonly byte[][] s_signaturesOfIndexerNameAttribute = { s_signature_HasThis_Void_String };
         private static readonly byte[][] s_signaturesOfInternalsVisibleToAttribute = { s_signature_HasThis_Void_String };
-        private static readonly byte[][] s_signaturesOfOptionalAttribute = { s_signature_HasThis_Void };
+        private static byte[][] s_signaturesOfOptionalAttribute => s_signatures_HasThis_Void_Only;
         private static readonly byte[][] s_signaturesOfDefaultParameterValueAttribute = { s_signature_HasThis_Void_Object };
         private static readonly byte[][] s_signaturesOfDateTimeConstantAttribute = { s_signature_HasThis_Void_Int64 };
         private static readonly byte[][] s_signaturesOfDecimalConstantAttribute = { s_signature_HasThis_Void_UInt8_UInt8_UInt32_UInt32_UInt32, s_signature_HasThis_Void_UIn8_UInt8_Int32_Int32_Int32 };
-        private static readonly byte[][] s_signaturesOfIUnknownConstantAttribute = { s_signature_HasThis_Void };
-        private static readonly byte[][] s_signaturesOfCallerFilePathAttribute = { s_signature_HasThis_Void };
-        private static readonly byte[][] s_signaturesOfCallerLineNumberAttribute = { s_signature_HasThis_Void };
-        private static readonly byte[][] s_signaturesOfCallerMemberNameAttribute = { s_signature_HasThis_Void };
-        private static readonly byte[][] s_signaturesOfIDispatchConstantAttribute = { s_signature_HasThis_Void };
-        private static readonly byte[][] s_signaturesOfParamArrayAttribute = { s_signature_HasThis_Void };
+        private static byte[][] s_signaturesOfIUnknownConstantAttribute => s_signatures_HasThis_Void_Only;
+        private static byte[][] s_signaturesOfCallerFilePathAttribute => s_signatures_HasThis_Void_Only;
+        private static byte[][] s_signaturesOfCallerLineNumberAttribute => s_signatures_HasThis_Void_Only;
+        private static byte[][] s_signaturesOfCallerMemberNameAttribute => s_signatures_HasThis_Void_Only;
+        private static byte[][] s_signaturesOfIDispatchConstantAttribute => s_signatures_HasThis_Void_Only;
         private static readonly byte[][] s_signaturesOfDllImportAttribute = { s_signature_HasThis_Void_String };
-        private static readonly byte[][] s_signaturesOfUnverifiableCodeAttribute = { s_signature_HasThis_Void };
+        private static byte[][] s_signaturesOfUnverifiableCodeAttribute => s_signatures_HasThis_Void_Only;
         private static readonly byte[][] s_signaturesOfSecurityPermissionAttribute = { s_signature_HasThis_Void_SecurityAction };
         private static readonly byte[][] s_signaturesOfCoClassAttribute = { s_signature_HasThis_Void_Type };
-        private static readonly byte[][] s_signaturesOfComImportAttribute = { s_signature_HasThis_Void };
+        private static byte[][] s_signaturesOfComImportAttribute => s_signatures_HasThis_Void_Only;
         private static readonly byte[][] s_signaturesOfGuidAttribute = { s_signature_HasThis_Void_String };
         private static readonly byte[][] s_signaturesOfCLSCompliantAttribute = { s_signature_HasThis_Void_Boolean };
 
@@ -255,30 +255,30 @@ namespace Microsoft.CodeAnalysis
             s_signature_HasThis_Void_MethodImplOptions,
         };
 
-        private static readonly byte[][] s_signaturesOfPreserveSigAttribute = { s_signature_HasThis_Void };
+        private static byte[][] s_signaturesOfPreserveSigAttribute => s_signatures_HasThis_Void_Only;
         private static readonly byte[][] s_signaturesOfDefaultCharSetAttribute = { s_signature_HasThis_Void_CharSet };
 
-        private static readonly byte[][] s_signaturesOfSpecialNameAttribute = { s_signature_HasThis_Void };
-        private static readonly byte[][] s_signaturesOfNonSerializedAttribute = { s_signature_HasThis_Void };
+        private static byte[][] s_signaturesOfSpecialNameAttribute => s_signatures_HasThis_Void_Only;
+        private static byte[][] s_signaturesOfNonSerializedAttribute => s_signatures_HasThis_Void_Only;
         private static readonly byte[][] s_signaturesOfFieldOffsetAttribute = { s_signature_HasThis_Void_Int32 };
-        private static readonly byte[][] s_signaturesOfSerializableAttribute = { s_signature_HasThis_Void };
-        private static readonly byte[][] s_signaturesOfInAttribute = { s_signature_HasThis_Void };
-        private static readonly byte[][] s_signaturesOfOutAttribute = { s_signature_HasThis_Void };
-        private static readonly byte[][] s_signaturesOfIsReadOnlyAttribute = { s_signature_HasThis_Void };
-        private static readonly byte[][] s_signaturesOfIsUnmanagedAttribute = { s_signature_HasThis_Void };
-        private static readonly byte[][] s_signaturesOfAllowNullAttribute = { s_signature_HasThis_Void };
-        private static readonly byte[][] s_signaturesOfDisallowNullAttribute = { s_signature_HasThis_Void };
-        private static readonly byte[][] s_signaturesOfMaybeNullAttribute = { s_signature_HasThis_Void };
+        private static byte[][] s_signaturesOfSerializableAttribute => s_signatures_HasThis_Void_Only;
+        private static byte[][] s_signaturesOfInAttribute => s_signatures_HasThis_Void_Only;
+        private static byte[][] s_signaturesOfOutAttribute => s_signatures_HasThis_Void_Only;
+        private static byte[][] s_signaturesOfIsReadOnlyAttribute => s_signatures_HasThis_Void_Only;
+        private static byte[][] s_signaturesOfIsUnmanagedAttribute => s_signatures_HasThis_Void_Only;
+        private static byte[][] s_signaturesOfAllowNullAttribute => s_signatures_HasThis_Void_Only;
+        private static byte[][] s_signaturesOfDisallowNullAttribute => s_signatures_HasThis_Void_Only;
+        private static byte[][] s_signaturesOfMaybeNullAttribute => s_signatures_HasThis_Void_Only;
         private static readonly byte[][] s_signaturesOfMaybeNullWhenAttribute = { s_signature_HasThis_Void_Boolean };
-        private static readonly byte[][] s_signaturesOfNotNullAttribute = { s_signature_HasThis_Void };
+        private static byte[][] s_signaturesOfNotNullAttribute => s_signatures_HasThis_Void_Only;
         private static readonly byte[][] s_signaturesOfMemberNotNullAttribute = { s_signature_HasThis_Void_String, s_signature_HasThis_Void_SzArray_String };
         private static readonly byte[][] s_signaturesOfMemberNotNullWhenAttribute = { s_signature_HasThis_Void_Boolean_String, s_signature_HasThis_Void_Boolean_SzArray_String };
         private static readonly byte[][] s_signaturesOfNotNullIfNotNullAttribute = { s_signature_HasThis_Void_String };
         private static readonly byte[][] s_signaturesOfNotNullWhenAttribute = { s_signature_HasThis_Void_Boolean };
         private static readonly byte[][] s_signaturesOfDoesNotReturnIfAttribute = { s_signature_HasThis_Void_Boolean };
-        private static readonly byte[][] s_signaturesOfDoesNotReturnAttribute = { s_signature_HasThis_Void };
+        private static byte[][] s_signaturesOfDoesNotReturnAttribute => s_signatures_HasThis_Void_Only;
         private static readonly byte[][] s_signaturesOfFixedBufferAttribute = { s_signature_HasThis_Void_Type_Int32 };
-        private static readonly byte[][] s_signaturesOfSuppressUnmanagedCodeSecurityAttribute = { s_signature_HasThis_Void };
+        private static byte[][] s_signaturesOfSuppressUnmanagedCodeSecurityAttribute => s_signatures_HasThis_Void_Only;
         private static readonly byte[][] s_signaturesOfPrincipalPermissionAttribute = { s_signature_HasThis_Void_SecurityAction };
         private static readonly byte[][] s_signaturesOfPermissionSetAttribute = { s_signature_HasThis_Void_SecurityAction };
 
@@ -315,9 +315,9 @@ namespace Microsoft.CodeAnalysis
             s_signature_HasThis_Void_SecurityAction
         };
 
-        private static readonly byte[][] s_signaturesOfVisualBasicEmbedded = { s_signature_HasThis_Void };
+        private static byte[][] s_signaturesOfVisualBasicEmbedded => s_signatures_HasThis_Void_Only;
 
-        private static readonly byte[][] s_signaturesOfCodeAnalysisEmbedded = { s_signature_HasThis_Void };
+        private static byte[][] s_signaturesOfCodeAnalysisEmbedded => s_signatures_HasThis_Void_Only;
 
         private static readonly byte[][] s_signaturesOfVisualBasicComClassAttribute =
         {
@@ -345,7 +345,7 @@ namespace Microsoft.CodeAnalysis
             s_signature_HasThis_Void_CompilationRelaxations
         };
 
-        private static readonly byte[][] s_signaturesOfReferenceAssemblyAttribute = { s_signature_HasThis_Void };
+        private static byte[][] s_signaturesOfReferenceAssemblyAttribute => s_signatures_HasThis_Void_Only;
 
         private static readonly byte[][] s_signaturesOfDebuggableAttribute =
         {
@@ -366,25 +366,25 @@ namespace Microsoft.CodeAnalysis
         private static readonly byte[][] s_signaturesOfConditionalAttribute = { s_signature_HasThis_Void_String };
         private static readonly byte[][] s_signaturesOfTypeLibVersionAttribute = { s_signature_HasThis_Void_Int32_Int32 };
         private static readonly byte[][] s_signaturesOfComCompatibleVersionAttribute = { s_signature_HasThis_Void_Int32_Int32_Int32_Int32 };
-        private static readonly byte[][] s_signaturesOfWindowsRuntimeImportAttribute = { s_signature_HasThis_Void };
-        private static readonly byte[][] s_signaturesOfDynamicSecurityMethodAttribute = { s_signature_HasThis_Void };
+        private static byte[][] s_signaturesOfWindowsRuntimeImportAttribute => s_signatures_HasThis_Void_Only;
+        private static byte[][] s_signaturesOfDynamicSecurityMethodAttribute => s_signatures_HasThis_Void_Only;
         private static readonly byte[][] s_signaturesOfRequiredAttributeAttribute = { s_signature_HasThis_Void_Type };
         private static readonly byte[][] s_signaturesOfAsyncMethodBuilderAttribute = { s_signature_HasThis_Void_Type };
         private static readonly byte[][] s_signaturesOfAsyncStateMachineAttribute = { s_signature_HasThis_Void_Type };
         private static readonly byte[][] s_signaturesOfIteratorStateMachineAttribute = { s_signature_HasThis_Void_Type };
-        private static readonly byte[][] s_signaturesOfRuntimeCompatibilityAttribute = { s_signature_HasThis_Void };
+        private static byte[][] s_signaturesOfRuntimeCompatibilityAttribute => s_signatures_HasThis_Void_Only;
         private static readonly byte[][] s_signaturesOfTypeForwardedToAttribute = { s_signature_HasThis_Void_Type };
-        private static readonly byte[][] s_signaturesOfSTAThreadAttribute = { s_signature_HasThis_Void };
-        private static readonly byte[][] s_signaturesOfMTAThreadAttribute = { s_signature_HasThis_Void };
-        private static readonly byte[][] s_signaturesOfOptionCompareAttribute = { s_signature_HasThis_Void };
+        private static byte[][] s_signaturesOfSTAThreadAttribute => s_signatures_HasThis_Void_Only;
+        private static byte[][] s_signaturesOfMTAThreadAttribute => s_signatures_HasThis_Void_Only;
+        private static byte[][] s_signaturesOfOptionCompareAttribute => s_signatures_HasThis_Void_Only;
         private static readonly byte[][] s_signaturesOfObsoleteAttribute = { s_signature_HasThis_Void, s_signature_HasThis_Void_String, s_signature_HasThis_Void_String_Boolean };
         private static readonly byte[][] s_signaturesOfDynamicAttribute = { s_signature_HasThis_Void, s_signature_HasThis_Void_SzArray_Boolean };
         private static readonly byte[][] s_signaturesOfTupleElementNamesAttribute = { s_signature_HasThis_Void, s_signature_HasThis_Void_SzArray_String };
-        private static readonly byte[][] s_signaturesOfIsByRefLikeAttribute = { s_signature_HasThis_Void };
-        private static readonly byte[][] s_signaturesOfDebuggerHiddenAttribute = { s_signature_HasThis_Void };
-        private static readonly byte[][] s_signaturesOfDebuggerNonUserCodeAttribute = { s_signature_HasThis_Void };
-        private static readonly byte[][] s_signaturesOfDebuggerStepperBoundaryAttribute = { s_signature_HasThis_Void };
-        private static readonly byte[][] s_signaturesOfDebuggerStepThroughAttribute = { s_signature_HasThis_Void };
+        private static byte[][] s_signaturesOfIsByRefLikeAttribute => s_signatures_HasThis_Void_Only;
+        private static byte[][] s_signaturesOfDebuggerHiddenAttribute => s_signatures_HasThis_Void_Only;
+        private static byte[][] s_signaturesOfDebuggerNonUserCodeAttribute => s_signatures_HasThis_Void_Only;
+        private static byte[][] s_signaturesOfDebuggerStepperBoundaryAttribute => s_signatures_HasThis_Void_Only;
+        private static byte[][] s_signaturesOfDebuggerStepThroughAttribute => s_signatures_HasThis_Void_Only;
 
         private static readonly byte[][] s_signaturesOfSecurityCriticalAttribute =
         {
@@ -392,12 +392,12 @@ namespace Microsoft.CodeAnalysis
             s_signature_HasThis_Void_SecurityCriticalScope
         };
 
-        private static readonly byte[][] s_signaturesOfSecuritySafeCriticalAttribute = { s_signature_HasThis_Void };
-        private static readonly byte[][] s_signaturesOfDesignerGeneratedAttribute = { s_signature_HasThis_Void };
+        private static byte[][] s_signaturesOfSecuritySafeCriticalAttribute => s_signatures_HasThis_Void_Only;
+        private static byte[][] s_signaturesOfDesignerGeneratedAttribute => s_signatures_HasThis_Void_Only;
         private static readonly byte[][] s_signaturesOfMyGroupCollectionAttribute = { s_signature_HasThis_Void_String_String_String_String };
         private static readonly byte[][] s_signaturesOfComEventInterfaceAttribute = { s_signature_HasThis_Void_Type_Type };
         private static readonly byte[][] s_signaturesOfBestFitMappingAttribute = { s_signature_HasThis_Void_Boolean };
-        private static readonly byte[][] s_signaturesOfFlagsAttribute = { s_signature_HasThis_Void };
+        private static byte[][] s_signaturesOfFlagsAttribute => s_signatures_HasThis_Void_Only;
         private static readonly byte[][] s_signaturesOfLCIDConversionAttribute = { s_signature_HasThis_Void_Int32 };
         private static readonly byte[][] s_signaturesOfUnmanagedFunctionPointerAttribute = { s_signature_HasThis_Void_CallingConvention };
         private static readonly byte[][] s_signaturesOfPrimaryInteropAssemblyAttribute = { s_signature_HasThis_Void_Int32_Int32 };
@@ -422,10 +422,10 @@ namespace Microsoft.CodeAnalysis
         private static readonly byte[][] s_signaturesOfNullableAttribute = { s_signature_HasThis_Void_Byte, s_signature_HasThis_Void_SzArray_Byte };
         private static readonly byte[][] s_signaturesOfNullableContextAttribute = { s_signature_HasThis_Void_Byte };
         private static readonly byte[][] s_signaturesOfNullablePublicOnlyAttribute = { s_signature_HasThis_Void_Boolean };
-        private static readonly byte[][] s_signaturesOfExperimentalAttribute = { s_signature_HasThis_Void };
-        private static readonly byte[][] s_signaturesOfExcludeFromCodeCoverageAttribute = { s_signature_HasThis_Void };
-        private static readonly byte[][] s_signaturesOfSkipLocalsInitAttribute = { s_signature_HasThis_Void };
-        private static readonly byte[][] s_signaturesOfEnumeratorCancellationAttribute = { s_signature_HasThis_Void };
+        private static byte[][] s_signaturesOfExperimentalAttribute => s_signatures_HasThis_Void_Only;
+        private static byte[][] s_signaturesOfExcludeFromCodeCoverageAttribute => s_signatures_HasThis_Void_Only;
+        private static byte[][] s_signaturesOfSkipLocalsInitAttribute => s_signatures_HasThis_Void_Only;
+        private static byte[][] s_signaturesOfEnumeratorCancellationAttribute => s_signatures_HasThis_Void_Only;
         private static readonly byte[][] s_signaturesOfNativeIntegerAttribute = { s_signature_HasThis_Void, s_signature_HasThis_Void_SzArray_Boolean };
 
         // early decoded attributes:
@@ -440,7 +440,8 @@ namespace Microsoft.CodeAnalysis
         internal static readonly AttributeDescription AssemblySignatureKeyAttribute = new AttributeDescription("System.Reflection", "AssemblySignatureKeyAttribute", s_signaturesOfAssemblySignatureKeyAttribute);
         internal static readonly AttributeDescription AssemblyKeyFileAttribute = new AttributeDescription("System.Reflection", "AssemblyKeyFileAttribute", s_signaturesOfAssemblyKeyFileAttribute);
         internal static readonly AttributeDescription AssemblyKeyNameAttribute = new AttributeDescription("System.Reflection", "AssemblyKeyNameAttribute", s_signaturesOfAssemblyKeyNameAttribute);
-        internal static readonly AttributeDescription ParamArrayAttribute = new AttributeDescription("System", "ParamArrayAttribute", s_signaturesOfParamArrayAttribute);
+        internal static readonly AttributeDescription ParamArrayAttribute = new AttributeDescription("System", "ParamArrayAttribute", s_signatures_HasThis_Void_Only);
+        internal static readonly AttributeDescription ParamCollectionAttribute = new AttributeDescription("System.Runtime.CompilerServices", "ParamCollectionAttribute", s_signatures_HasThis_Void_Only);
         internal static readonly AttributeDescription DefaultMemberAttribute = new AttributeDescription("System.Reflection", "DefaultMemberAttribute", s_signaturesOfDefaultMemberAttribute);
         internal static readonly AttributeDescription IndexerNameAttribute = new AttributeDescription("System.Runtime.CompilerServices", "IndexerNameAttribute", s_signaturesOfIndexerNameAttribute);
         internal static readonly AttributeDescription AssemblyDelaySignAttribute = new AttributeDescription("System.Reflection", "AssemblyDelaySignAttribute", s_signaturesOfAssemblyDelaySignAttribute);
