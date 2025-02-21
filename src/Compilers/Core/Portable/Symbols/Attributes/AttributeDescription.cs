@@ -226,7 +226,7 @@ namespace Microsoft.CodeAnalysis
             s_signature_HasThis_Void_Int32,
             s_signature_HasThis_Void_UInt32
         };
-        private static byte[][] s_signatures_HasThis_Void_Only => s_signatures_HasThis_Void_Only;
+        private static readonly byte[][] s_signatures_HasThis_Void_Only = { s_signature_HasThis_Void };
         private static readonly byte[][] s_signaturesOfDefaultMemberAttribute = { s_signature_HasThis_Void_String };
         private static readonly byte[][] s_signaturesOfAccessedThroughPropertyAttribute = { s_signature_HasThis_Void_String };
         private static readonly byte[][] s_signaturesOfIndexerNameAttribute = { s_signature_HasThis_Void_String };
