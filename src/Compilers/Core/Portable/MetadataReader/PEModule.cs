@@ -970,6 +970,11 @@ namespace Microsoft.CodeAnalysis
             return FindTargetAttribute(token, AttributeDescription.ParamArrayAttribute).HasValue;
         }
 
+        internal bool HasParamCollectionAttribute(EntityHandle token)
+        {
+            return FindTargetAttribute(token, AttributeDescription.ParamCollectionAttribute).HasValue;
+        }
+
         internal bool HasIsReadOnlyAttribute(EntityHandle token)
         {
             return FindTargetAttribute(token, AttributeDescription.IsReadOnlyAttribute).HasValue;
