@@ -17,7 +17,7 @@
     <!-- NuGet -->
     <IsPackable>true</IsPackable>
     <PackageId>Peachpie.Microsoft.CodeAnalysis</PackageId>
-    <PackageVersion>3.7.3</PackageVersion>
+    <PackageVersion>3.7.4</PackageVersion>
     <Authors>Microsoft, Peachpie, Jakub Misek, Robert Husak</Authors>
     <Description>Roslyn CodeAnalysis slightly modified to be used by Peachpie.</Description>
     <PackageTags>php;peachpie;dotnet;compiler;roslyn</PackageTags>
